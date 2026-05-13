@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.env
+*.env
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/google_token.json
+backend/data/google_token.json
+whatsapp/auth_info_baileys/
+node_modules/
+.DS_Store

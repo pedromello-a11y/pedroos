@@ -1,0 +1,2179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pedro OS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Syne', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    :root {
+      --accent: #FF5A1F;
+      --accent-10: rgba(255,90,31,0.10);
+      --accent-20: rgba(255,90,31,0.22);
+      --bg: #06090F;
+      --surface: #0B1018;
+      --card: #0F1620;
+      --border: #192332;
+      --border2: #253040;
+    }
+    * { box-sizing: border-box; }
+    [x-cloak] { display: none !important; }
+    body { background: var(--bg); }
+
+    .ac { color: var(--accent); }
+    .bg-ac { background: var(--accent); }
+    .bg-ac-10 { background: var(--accent-10); }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .card:hover { border-color: var(--border2); }
+
+    input, textarea, select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: #DDE4EF;
+      outline: none;
+      font-family: 'Syne', sans-serif;
+      font-size: 13px;
+    }
+    input:focus, textarea:focus, select:focus { border-color: var(--border2); }
+    select option { background: #0F1620; }
+    textarea { resize: vertical; }
+
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border2); }
+
+    @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeOut { to { opacity: 0; transform: scale(0.96); } }
+    .slide-up { animation: slideUp 0.18s ease; }
+    .fade-out { animation: fadeOut 0.22s ease forwards; }
+
+    .ctx-hm { background: rgba(255,90,31,0.12);  color: #FF7A45; border: 1px solid rgba(255,90,31,0.22); }
+    .ctx-ps { background: rgba(34,211,238,0.12); color: #22D3EE; border: 1px solid rgba(34,211,238,0.22); }
+
+    .task-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      border-radius: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: border-color 0.13s, background 0.13s;
+    }
+    .task-row:hover { border-color: var(--border2); background: #131C28; }
+
+    .sb-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: border-color 0.13s, background 0.13s;
+      font-size: 12px;
+    }
+    .sb-row:hover { border-color: var(--border2); }
+
+    .check-btn {
+      width: 20px; height: 20px;
+      border-radius: 5px;
+      border: 1px solid var(--border2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: #4A6080;
+      flex-shrink: 0;
+      transition: all 0.13s;
+    }
+    .check-btn:hover { border-color: #22C55E; background: rgba(34,197,94,0.1); color: #22C55E; }
+
+    .check-btn-sm {
+      width: 16px; height: 16px;
+      border-radius: 4px;
+      border: 1px solid var(--border2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; color: #4A6080;
+      flex-shrink: 0;
+      transition: all 0.13s;
+    }
+    .check-btn-sm:hover { border-color: #22C55E; background: rgba(34,197,94,0.1); color: #22C55E; }
+
+    .badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 100px;
+      white-space: nowrap;
+    }
+
+    .priority-bar {
+      width: 3px;
+      border-radius: 2px;
+      flex-shrink: 0;
+      align-self: stretch;
+      min-height: 14px;
+    }
+    .p1-bar { background: #EF4444; }
+    .p2-bar { background: #F97316; }
+    .p3-bar { background: #2D3848; }
+    .pb-bar { background: #1F2937; }
+
+    .status-chip {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      border-width: 1px;
+      border-style: solid;
+      white-space: nowrap;
+      min-width: 72px;
+      text-align: center;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      display: inline-block;
+    }
+    .status-chip:hover { opacity: 0.7; }
+    .deadline-badge {
+      font-size: 11px;
+      font-weight: 600;
+      font-family: ui-monospace, monospace;
+      white-space: nowrap;
+    }
+    .deadline-today  { color: #f97316; }
+    .deadline-soon   { color: #eab308; }
+    .deadline-future { color: #94a3b8; }
+    .deadline-overdue{ color: #ef4444; }
+    .deadline-done   { color: #475569; }
+    .bl-drag-over { opacity: 0.4; outline: 1px dashed var(--border2); border-radius: 6px; }
+    .task-row-doing {
+      background: rgba(234,179,8,0.05) !important;
+      border-left: 3px solid rgba(234,179,8,0.65) !important;
+    }
+    .task-row-hover-show { display: none; }
+    .task-row:hover .task-row-hover-show { display: inline; }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #4A6080;
+    }
+
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+    /* Layout */
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 28px;
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px 24px;
+    }
+    @media (max-width: 1024px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body class="text-slate-200 font-sans min-h-screen" x-data="pedroOS()" x-init="init()" x-cloak>
+
+<!-- ── TOASTS ─────────────────────────────────────────────────────────────── -->
+<div class="fixed bottom-5 right-5 z-50 flex flex-col gap-2" style="min-width:280px">
+  <template x-for="toast in toasts" :key="toast.id">
+    <div class="slide-up rounded-xl px-4 py-3 flex items-center justify-between gap-3 shadow-2xl"
+      style="background:var(--card);border:1px solid var(--border2)">
+      <span class="text-sm text-slate-200" x-text="toast.message"></span>
+      <button x-show="toast.undo" @click="toast.undo(); removeToast(toast.id)"
+        class="text-xs font-semibold whitespace-nowrap ac">Desfazer</button>
+    </div>
+  </template>
+</div>
+
+<!-- ── HEADER ─────────────────────────────────────────────────────────────── -->
+<header style="background:var(--surface);border-bottom:1px solid var(--border)" class="sticky top-0 z-30">
+  <div class="max-w-[1440px] mx-auto px-6 py-3 flex items-center gap-4">
+
+    <span class="text-base font-extrabold tracking-tight text-white shrink-0" style="letter-spacing:-0.5px">
+      Pedro<span class="ac">OS</span>
+    </span>
+
+    <!-- Context toggle -->
+    <div class="flex items-center shrink-0 rounded-lg p-0.5" style="background:var(--bg);border:1px solid var(--border)">
+      <button @click="setContext('hotmart')"
+        :class="context === 'hotmart' ? 'ctx-hm' : 'text-slate-500 hover:text-slate-300'"
+        class="text-xs font-bold px-4 py-1.5 rounded-md transition-all">Hotmart</button>
+      <button @click="setContext('personal')"
+        :class="context === 'personal' ? 'ctx-ps' : 'text-slate-500 hover:text-slate-300'"
+        class="text-xs font-bold px-4 py-1.5 rounded-md transition-all">Pessoal</button>
+    </div>
+
+    <!-- Quick capture -->
+    <input x-ref="quickCapture" x-model="quickTitle"
+      @keydown.enter="createQuickTask()"
+      @keydown.escape="quickTitle = ''"
+      type="text"
+      :placeholder="'nova tarefa em ' + (context === 'personal' ? 'Pessoal' : 'Hotmart') + '… (Enter)'"
+      class="flex-1 px-3 py-1.5 text-sm" style="min-width:0" />
+
+    <!-- Status indicators -->
+    <div class="flex items-center gap-3 shrink-0">
+      <div class="flex items-center gap-1.5 group" title="WhatsApp">
+        <div :class="waConnected ? 'bg-emerald-400' : qrDataUrl ? 'bg-yellow-400 animate-pulse' : 'bg-slate-600'" class="status-dot"></div>
+        <span class="text-[10px] font-bold text-slate-500 tracking-wider">WA</span>
+        <button @click="resetWA()" title="Resetar sessão WhatsApp"
+          class="text-[10px] text-slate-600 hover:text-orange-400 transition-colors opacity-0 group-hover:opacity-100 leading-none">↺</button>
+      </div>
+      <div class="flex items-center gap-1.5" title="Google Calendar">
+        <div :class="calConnected ? 'bg-emerald-400' : 'bg-slate-700'" class="status-dot"></div>
+        <span class="text-[10px] font-bold text-slate-500 tracking-wider">CAL</span>
+      </div>
+      <div class="flex items-center gap-1.5" title="Jira">
+        <div :class="jiraConnected ? 'bg-emerald-400' : 'bg-slate-700'" class="status-dot"></div>
+        <span class="text-[10px] font-bold text-slate-500 tracking-wider">JIRA</span>
+      </div>
+      <button @click="openNewProjectModal()"
+        class="text-xs text-slate-500 hover:text-white transition-colors px-2"
+        title="Novo projeto">+ projeto</button>
+
+      <!-- QR trigger (only when WA disconnected) -->
+      <button x-show="!waConnected" @click="showQR = !showQR"
+        class="text-[10px] font-bold text-yellow-400 hover:text-yellow-300 px-2 transition-colors">QR</button>
+    </div>
+
+    <!-- QR panel -->
+    <div x-show="showQR && !waConnected" x-cloak
+      class="absolute top-14 right-5 z-50 rounded-xl p-4 shadow-2xl slide-up"
+      style="min-width:272px;background:var(--card);border:1px solid var(--border2)">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold text-slate-300">Escaneia no WhatsApp</span>
+        <button @click="showQR = false" class="text-slate-500 hover:text-slate-300 text-lg leading-none">×</button>
+      </div>
+      <div x-show="qrDataUrl" class="flex justify-center">
+        <img :src="qrDataUrl" class="rounded-lg w-48 h-48" alt="QR" />
+      </div>
+      <div x-show="!qrDataUrl" class="text-center py-6 text-slate-600 text-xs">Aguardando QR…</div>
+    </div>
+  </div>
+</header>
+
+<!-- ── LAYOUT: MAIN + SIDEBAR ─────────────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- ═════ MAIN: INBOX + DUMP ═════════════════════════════════════════════ -->
+  <main>
+
+    <!-- INBOX (only when items exist) -->
+    <section x-show="inbox.length > 0" class="mb-7">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="section-label">📥 Inbox</span>
+          <span class="text-xs font-bold ac font-mono" x-text="inbox.length"></span>
+        </div>
+        <button @click="inboxExpanded = !inboxExpanded"
+          class="text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
+          x-text="inboxExpanded ? '— recolher' : '+ expandir'"></button>
+      </div>
+
+      <!-- Compact mode -->
+      <div x-show="!inboxExpanded" class="flex flex-col gap-1.5">
+        <template x-for="task in inbox" :key="task.id">
+          <div @click="openModal(task)" class="task-row"
+            :style="'border-left: 3px solid ' + (getProjectContext(task.project_slug) === 'personal' ? '#22D3EE' : '#FF5A1F')">
+            <span class="text-sm flex-1 min-w-0 truncate" x-text="task.title || task.raw_input || '(sem título)'"></span>
+            <span class="text-xs text-slate-600 font-mono shrink-0" x-text="relativeTime(task.created_at)"></span>
+          </div>
+        </template>
+      </div>
+
+      <!-- Expanded mode (full edit cards) -->
+      <div x-show="inboxExpanded" class="flex flex-col gap-3">
+        <template x-for="task in inbox" :key="task.id">
+          <div x-data="inboxCard(task)" class="card p-4"
+            :class="removing ? 'fade-out pointer-events-none' : ''">
+
+            <div class="flex items-start justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs text-slate-600" x-text="'#' + task.short_id"></span>
+                <span class="badge"
+                  :class="getProjectContext(draft.project_slug) === 'personal' ? 'ctx-ps' : 'ctx-hm'"
+                  x-text="getProjectContext(draft.project_slug) === 'personal' ? 'Pessoal' : 'Hotmart'"></span>
+              </div>
+              <span class="text-xs text-slate-600" x-text="relativeTime(task.created_at)"></span>
+            </div>
+
+            <div x-show="task.raw_input" class="rounded-lg px-3 py-2 mb-3 border-l-2 border-slate-700"
+              style="background:var(--surface)">
+              <p class="text-xs text-slate-500 italic" x-text="'&quot;' + task.raw_input + '&quot;'"></p>
+            </div>
+
+            <div class="mb-3">
+              <label class="text-xs text-slate-500 mb-1 block font-semibold">Título</label>
+              <input x-model="draft.title" @input="autosave('title', draft.title)"
+                type="text" class="w-full px-3 py-2" />
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 mb-3">
+              <div>
+                <label class="text-xs text-slate-500 mb-1 block font-semibold">Projeto</label>
+                <div class="flex gap-1">
+                  <select x-model="draft.project_slug" @change="autosave('project_slug', draft.project_slug)"
+                    class="flex-1 px-2 py-1.5 text-xs">
+                    <option value="">— nenhum</option>
+                    <template x-for="p in $root.projects" :key="p.slug">
+                      <option :value="p.slug" x-text="p.name"></option>
+                    </template>
+                  </select>
+                  <button @click="openNewProjectFromCard()" title="Novo projeto"
+                    class="w-7 rounded-lg text-xs text-slate-500 hover:text-white transition-colors flex items-center justify-center font-bold"
+                    style="background:var(--surface);border:1px solid var(--border)">+</button>
+                </div>
+              </div>
+              <div>
+                <label class="text-xs text-slate-500 mb-1 block font-semibold">Prazo</label>
+                <input x-model="draft.deadline" @change="autosave('deadline', draft.deadline)"
+                  type="date" class="w-full px-2 py-1.5" />
+              </div>
+              <div>
+                <label class="text-xs text-slate-500 mb-1 block font-semibold">Prioridade</label>
+                <select x-model="draft.priority" @change="autosave('priority', draft.priority)"
+                  class="w-full px-2 py-1.5 text-xs">
+                  <option value="p1">🔺 Urgente</option>
+                  <option value="p2">🔸 Alta</option>
+                  <option value="p3">⚪ Normal</option>
+                  <option value="backlog">⬜ Backlog</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <button @click="openFull()" class="text-xs text-slate-600 hover:text-slate-300 transition-colors">+ detalhes</button>
+              <div class="flex gap-2">
+                <button @click="discard()"
+                  class="text-xs px-3 py-1.5 rounded-lg transition-colors text-red-500 hover:text-red-400"
+                  style="border:1px solid rgba(239,68,68,0.2)">🗑 descartar</button>
+                <button @click="snooze()"
+                  class="text-xs px-3 py-1.5 rounded-lg transition-colors text-slate-400 hover:text-slate-200"
+                  style="border:1px solid var(--border2)">⏰ snooze</button>
+                <button @click="review()"
+                  class="text-xs px-3 py-1.5 rounded-lg transition-colors font-semibold text-emerald-400 hover:text-emerald-300"
+                  style="border:1px solid rgba(52,211,153,0.2)">✓ revisada</button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <!-- TASK DUMP -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <span class="section-label">Todas as tarefas</span>
+          <span class="text-xs text-slate-600 font-mono" x-text="'· ' + totalDumpCount"></span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="badge" :class="context === 'personal' ? 'ctx-ps' : 'ctx-hm'"
+            x-text="context === 'personal' ? 'Pessoal' : 'Hotmart'"></span>
+          <button @click="_sortMode = _sortMode === 'deadline' ? 'default' : 'deadline'"
+            class="text-[10px] font-bold uppercase tracking-wider transition-colors"
+            :class="_sortMode === 'deadline' ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'"
+            title="Reordenar por prazo mais próximo">⇅ prazo</button>
+          <button @click="showDone = !showDone; if(showDone) loadDoneTasks()"
+            class="text-[10px] font-bold uppercase tracking-wider transition-colors"
+            :class="showDone ? 'text-slate-300' : 'text-slate-500 hover:text-slate-300'">
+            <span x-text="showDone ? '▲ concluídas' : '▼ concluídas'"></span>
+          </button>
+          <button @click="loadAllTasks()" class="text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors">↻ atualizar</button>
+        </div>
+      </div>
+
+      <div x-show="flatTasks.length === 0" class="text-center py-16 text-slate-600 text-sm">
+        Nenhuma tarefa em <span x-text="context === 'personal' ? 'Pessoal' : 'Hotmart'"></span> ainda.
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <template x-for="task in flatTasks" :key="task.id">
+          <div>
+            <div @click="openModal(task)" class="task-row"
+              :class="[task.status === 'doing' ? 'task-row-doing' : '', task.deadline && task.deadline < todayStr && task.status !== 'doing' ? 'overdue-row' : '', _blDragOver === task.id ? 'bl-drag-over' : '']"
+              :style="task.deadline && task.deadline < todayStr && task.status !== 'doing' ? 'border-left: 2px solid #EF4444' : ''"
+              draggable="true"
+              @dragstart="blDragStart($event, task, taskGroup(task))"
+              @dragover.prevent="_blDragOver = task.id"
+              @dragleave="_blDragOver = null"
+              @drop.prevent="blDrop($event, task, taskGroup(task))"
+              @dragend="_blDragItem = null; _blDragSourceGroup = null; _blDragOver = null">
+              <span class="text-slate-700 hover:text-slate-400 text-sm shrink-0 select-none mr-1"
+                style="cursor:grab" @click.stop>⠿</span>
+              <span class="priority-bar" :class="priorityBarClass(task.priority)"></span>
+              <!-- project dot -->
+              <span class="shrink-0 w-1.5 h-1.5 rounded-full mr-1"
+                :style="'background:' + (projects.find(p => p.slug === task.project_slug)?.color || '#374151')"></span>
+              <span x-text="priorityEmoji(task.priority)" class="text-sm w-4 shrink-0"></span>
+              <!-- title + inline status note -->
+              <span class="text-sm min-w-0 truncate" :class="task.status_note ? 'shrink-0 max-w-[40%]' : 'flex-1'" x-text="task.title"></span>
+              <span x-show="task.status_note" @click.stop
+                x-data="{ editing: false, val: task.status_note || '' }"
+                class="flex-1 min-w-0 ml-2">
+                <span x-show="!editing" @click="editing = true; val = task.status_note || ''; $nextTick(() => $refs['sn_'+task.id]?.focus())"
+                  class="text-[11px] italic text-slate-600 hover:text-slate-400 transition-colors truncate block cursor-text"
+                  x-text="'· ' + task.status_note"></span>
+                <input x-show="editing" :x-ref="'sn_'+task.id"
+                  x-model="val"
+                  @blur="editing = false; task.status_note = val; api('/api/tasks/'+task.id, 'PATCH', {status_note: val || null})"
+                  @keydown.enter="editing = false; task.status_note = val; api('/api/tasks/'+task.id, 'PATCH', {status_note: val || null})"
+                  @keydown.escape="editing = false; val = task.status_note || ''"
+                  @click.stop
+                  class="text-[11px] italic text-slate-400 bg-transparent border-b border-slate-700 outline-none w-full px-0.5"
+                  placeholder="status..." />
+              </span>
+              <!-- add status note button when empty -->
+              <button x-show="!task.status_note" @click.stop
+                x-data="{ editing: false, val: '' }"
+                class="text-slate-700 hover:text-slate-500 text-[10px] shrink-0 transition-colors opacity-0 group-hover:opacity-100 ml-1"
+                style="font-size:10px"
+                @click="editing = true; $nextTick(() => $refs['snadd_'+task.id]?.focus())">
+                <input x-show="editing" :x-ref="'snadd_'+task.id"
+                  x-model="val"
+                  @blur="editing = false; if(val) { task.status_note = val; api('/api/tasks/'+task.id, 'PATCH', {status_note: val}); } val = ''"
+                  @keydown.enter="editing = false; if(val) { task.status_note = val; api('/api/tasks/'+task.id, 'PATCH', {status_note: val}); } val = ''"
+                  @keydown.escape="editing = false; val = ''"
+                  @click.stop
+                  class="text-[11px] italic text-slate-400 bg-transparent border-b border-slate-700 outline-none w-32 px-0.5"
+                  placeholder="+ status..." />
+                <span x-show="!editing" class="task-row-hover-show">+ status</span>
+              </button>
+              <!-- colunas fixas -->
+              <div class="flex items-center shrink-0" style="gap:8px">
+                <div style="width:80px" class="relative shrink-0" x-data="{ open: false }">
+                  <span @click.stop="open = !open" class="status-chip w-full block text-center"
+                    :class="statusChipClass(task.status)" x-text="statusLabel(task.status)"></span>
+                  <div x-show="open" @click.outside="open = false"
+                    class="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-2xl overflow-hidden"
+                    style="background:var(--card);border:1px solid var(--border2);min-width:90px">
+                    <template x-for="s in ['todo','doing','blocked','done']" :key="s">
+                      <button @click.stop="setTaskStatus(task, s); open = false"
+                        class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
+                        :class="task.status === s ? 'bg-slate-800/60' : ''">
+                        <span class="status-chip" :class="statusChipClass(s)" x-text="statusLabel(s)"
+                          style="pointer-events:none;cursor:default;min-width:0"></span>
+                      </button>
+                    </template>
+                  </div>
+                </div>
+                <div style="width:64px" class="shrink-0 overflow-hidden">
+                  <a x-show="task.jira_key" :href="jiraBaseUrl + '/browse/' + task.jira_key" target="_blank"
+                    @click.stop
+                    class="font-mono text-[10px] text-blue-400 hover:text-blue-300 transition-colors block truncate"
+                    x-text="task.jira_key"></a>
+                </div>
+                <div style="width:80px" class="shrink-0 text-right">
+                  <span x-show="task.deadline" class="deadline-badge"
+                    :class="{
+                      'deadline-today': task.deadline === todayStr && task.status !== 'done',
+                      'deadline-soon': task.deadline > todayStr && daysDiff(task.deadline) <= 7 && task.status !== 'done',
+                      'deadline-future': task.deadline > todayStr && daysDiff(task.deadline) > 7,
+                      'deadline-overdue': task.deadline < todayStr && task.status !== 'done',
+                      'deadline-done': task.status === 'done'
+                    }"
+                    x-text="task.deadline === todayStr && task.status !== 'done' ? 'hoje' : formatDate(task.deadline)"></span>
+                </div>
+                <button @click.stop="quickDone(task)" class="check-btn shrink-0">✓</button>
+              </div>
+            </div>
+            <!-- subtasks -->
+            <template x-if="subtasksByParent[task.id]?.length">
+              <div class="flex flex-col gap-1 mt-1 ml-6">
+                <template x-for="sub in subtasksByParent[task.id]" :key="sub.id">
+                  <div @click="openModal(sub)" class="task-row"
+                    :class="sub.status === 'doing' ? 'task-row-doing' : ''"
+                    :style="sub.status === 'doing' ? '' : 'border-left:2px solid var(--border2)'">
+                    <span class="flex-1 text-sm min-w-0 truncate text-slate-300" x-text="sub.title"></span>
+                    <div class="flex items-center shrink-0" style="gap:8px">
+                      <div style="width:80px" class="relative shrink-0" x-data="{ open: false }">
+                        <span @click.stop="open = !open" class="status-chip"
+                          :class="statusChipClass(sub.status)" x-text="statusLabel(sub.status)"></span>
+                        <div x-show="open" @click.outside="open = false"
+                          class="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-2xl overflow-hidden"
+                          style="background:var(--card);border:1px solid var(--border2);min-width:90px">
+                          <template x-for="s in ['todo','doing','blocked','done']" :key="s">
+                            <button @click.stop="setTaskStatus(sub, s); open = false"
+                              class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
+                              :class="sub.status === s ? 'bg-slate-800/60' : ''">
+                              <span class="status-chip" :class="statusChipClass(s)" x-text="statusLabel(s)"
+                                style="pointer-events:none;cursor:default;min-width:0"></span>
+                            </button>
+                          </template>
+                        </div>
+                      </div>
+                      <div style="width:64px" class="shrink-0 overflow-hidden">
+                        <a x-show="sub.jira_key" :href="'https://hotmart.atlassian.net/browse/' + sub.jira_key"
+                          @click.stop target="_blank"
+                          class="text-xs text-slate-500 hover:text-blue-400 truncate block" x-text="sub.jira_key"></a>
+                      </div>
+                      <div style="width:80px" class="shrink-0 text-right">
+                        <span x-show="sub.deadline" class="deadline-badge"
+                          :class="{
+                            'deadline-today': sub.deadline === todayStr && sub.status !== 'done',
+                            'deadline-soon': sub.deadline > todayStr && daysDiff(sub.deadline) <= 7 && sub.status !== 'done',
+                            'deadline-future': sub.deadline > todayStr && daysDiff(sub.deadline) > 7,
+                            'deadline-overdue': sub.deadline < todayStr && sub.status !== 'done',
+                            'deadline-done': sub.status === 'done'
+                          }"
+                          x-text="sub.deadline === todayStr && sub.status !== 'done' ? 'hoje' : formatDate(sub.deadline)"></span>
+                      </div>
+                      <button @click.stop="quickDone(sub)" class="check-btn-sm shrink-0">✓</button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+
+      <!-- CONCLUÍDAS -->
+      <div x-show="showDone" class="mt-8">
+        <div class="flex items-center gap-2 mb-4" style="border-top:1px solid var(--border);padding-top:1.5rem">
+          <span class="section-label text-slate-600">Concluídas</span>
+          <span class="text-xs text-slate-700 font-mono" x-text="'· ' + doneTasks.length"></span>
+        </div>
+        <div x-show="doneTasks.length === 0" class="text-sm text-slate-700 italic">Nenhuma tarefa concluída neste contexto.</div>
+        <div class="flex flex-col gap-1.5">
+          <template x-for="task in doneTasks" :key="task.id">
+            <div @click="openModal(task)" class="task-row opacity-50 hover:opacity-80 transition-opacity">
+              <span class="priority-bar pb-bar"></span>
+              <span class="text-slate-600 text-sm shrink-0">✓</span>
+              <span class="flex-1 text-sm min-w-0 truncate line-through text-slate-500" x-text="task.title"></span>
+              <div class="flex items-center shrink-0 gap-2">
+                <span x-show="task.project_slug" class="text-[10px] text-slate-700 font-mono truncate" style="max-width:80px" x-text="task.project_slug"></span>
+                <span x-show="task.completed_at" class="text-[10px] text-slate-700 font-mono" x-text="formatDate(task.completed_at?.slice(0,10))"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- ═════ SIDEBAR: HOJE ═════════════════════════════════════════════════ -->
+  <aside class="space-y-6 lg:sticky lg:top-[68px] lg:self-start" style="max-height: calc(100vh - 84px); overflow-y: auto;">
+
+    <!-- Date header -->
+    <div class="pb-3" style="border-bottom:1px solid var(--border)">
+      <p class="section-label mb-1">Hoje</p>
+      <div class="flex items-baseline gap-3">
+        <p class="text-xl font-bold text-white capitalize" x-text="formatDateFull(todayStr)"></p>
+        <p class="text-xl font-bold text-slate-500 font-mono" x-text="currentTime"></p>
+      </div>
+    </div>
+
+    <!-- MEETINGS TIMELINE (combined work + personal) -->
+    <div x-show="context !== 'personal'" x-data="{
+      now: new Date(),
+      startHour: 8, endHour: 22, pxPerMin: 0.55,
+      init() { setInterval(() => { this.now = new Date() }, 30000) },
+      allEvents() {
+        const work = (meetings || []).map(e => ({ ...e, kind: 'work' }));
+        const personal = (personalEvents || []).map(e => ({ ...e, kind: 'personal' }));
+        return [...work, ...personal].sort((a,b) => this.mfs(a.start_time) - this.mfs(b.start_time));
+      },
+      mfs(t) { if (!t) return 0; const [h,m] = t.split(':').map(Number); return (h - this.startHour)*60 + m },
+      nowM() { return (this.now.getHours() - this.startHour)*60 + this.now.getMinutes() },
+      inRange() { const m = this.nowM(); return m >= 0 && m <= (this.endHour - this.startHour)*60 },
+      dur(ev) { if (!ev.end_time) return 30; return this.mfs(ev.end_time) - this.mfs(ev.start_time) },
+      status(ev) {
+        const s = this.mfs(ev.start_time), e = s + this.dur(ev), n = this.nowM();
+        if (n >= s && n < e) return 'current'; if (n < s) return 'future'; return 'past';
+      },
+      nextId() {
+        const n = this.nowM();
+        return this.allEvents().filter(e => this.mfs(e.start_time) > n)[0]?.id;
+      },
+      minsUntil() {
+        const nx = this.allEvents().find(e => e.id === this.nextId());
+        return nx ? this.mfs(nx.start_time) - this.nowM() : null;
+      },
+      fmt(m) { if (m==null) return ''; const h=Math.floor(m/60),mi=m%60; return h===0?`${mi}min`:`${h}h${String(mi).padStart(2,'0')}` },
+      eTop(ev) { return this.mfs(ev.start_time) * this.pxPerMin },
+      eH(ev) { return Math.max(this.dur(ev) * this.pxPerMin, 14) },
+      compact(ev) { return this.eH(ev) < 32 }
+    }" x-init="init()">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="section-label">📅 Agenda</span>
+          <span class="text-[10px] font-bold ac font-mono" x-text="allEvents().length"></span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span x-show="minsUntil() != null && minsUntil() > 0 && calOffset === 0"
+            class="text-[10px] font-mono text-red-400 font-bold mr-1"
+            x-text="`+${fmt(minsUntil())}`"></span>
+          <button @click="shiftCal(-1)" class="text-slate-600 hover:text-slate-300 text-xs transition-colors px-1">‹</button>
+          <span class="text-[10px] font-mono text-slate-500" x-text="calOffsetLabel()"></span>
+          <button @click="shiftCal(1)" class="text-slate-600 hover:text-slate-300 text-xs transition-colors px-1">›</button>
+        </div>
+      </div>
+
+      <!-- Não conectado -->
+      <div x-show="!calConnected" class="flex flex-col gap-1.5">
+        <p class="text-xs text-slate-600 italic px-1">Calendar não conectado</p>
+        <button @click="connectCalendar()"
+          class="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+          style="background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.2);color:#22D3EE">
+          Conectar Google Calendar
+        </button>
+      </div>
+
+      <!-- Timeline -->
+      <div x-show="calConnected" class="flex gap-2">
+
+        <!-- Régua esquerda -->
+        <div class="relative shrink-0" :style="`width:32px;height:${(endHour-startHour)*60*pxPerMin}px`">
+          <div class="absolute rounded-full bg-white/5" style="left:18px;width:2px;top:4px;bottom:0"></div>
+
+          <template x-for="h in (endHour - startHour + 1)" :key="h">
+            <div x-show="(h-1) % 2 === 0" class="absolute pointer-events-none"
+              :style="`top:${(h-1)*60*pxPerMin}px;transform:translateY(-50%);left:0`">
+              <span class="text-[8px] text-zinc-600 font-mono"
+                x-text="String(startHour+h-1).padStart(2,'0')"></span>
+            </div>
+          </template>
+
+          <template x-for="ev in allEvents()" :key="ev.id">
+            <div class="absolute rounded-sm transition-all duration-200"
+              :class="{
+                'bg-zinc-600 opacity-50': status(ev)==='past',
+                'bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.6)]': ev.id===nextId(),
+                'bg-orange-500': status(ev)!=='past' && ev.id!==nextId() && ev.kind==='work',
+                'bg-violet-500': status(ev)!=='past' && ev.id!==nextId() && ev.kind==='personal'
+              }"
+              :style="`left:16px;width:6px;top:${eTop(ev)}px;height:${eH(ev)}px`"></div>
+          </template>
+
+          <div x-show="inRange()" class="absolute z-30 pointer-events-none flex items-center"
+            :style="`left:12px;right:-4px;top:${nowM()*pxPerMin}px`">
+            <div class="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.8)] -ml-0.5 shrink-0"></div>
+            <div class="flex-1 h-px bg-red-500"></div>
+          </div>
+        </div>
+
+        <!-- Cards posicionados por tempo -->
+        <div class="relative flex-1 min-w-0" :style="`height:${(endHour-startHour)*60*pxPerMin}px`">
+          <div x-show="allEvents().length === 0" class="text-xs text-slate-600 italic px-2 py-3">Sem compromissos hoje 🎉</div>
+          <template x-for="ev in allEvents()" :key="ev.id">
+            <a :href="ev.link || '#'" :target="ev.link ? '_blank' : ''"
+              class="absolute left-0 right-0 block rounded px-2 transition-all duration-150 overflow-hidden hover:z-40 hover:shadow-lg"
+              :class="{
+                'bg-zinc-900/60 opacity-45 hover:opacity-95': status(ev)==='past',
+                'bg-orange-500/15 border-l-2 border-orange-400 z-20': status(ev)==='current' && ev.kind==='work',
+                'bg-violet-500/15 border-l-2 border-violet-400 z-20': status(ev)==='current' && ev.kind==='personal',
+                'bg-cyan-500/10 border-l-2 border-cyan-400 shadow-[0_0_12px_-4px_rgba(34,211,238,0.4)] z-30': ev.id===nextId(),
+                'bg-zinc-900/70 border-l border-orange-500/40 hover:bg-zinc-800/90': status(ev)==='future' && ev.id!==nextId() && ev.kind==='work',
+                'bg-zinc-900/70 border-l border-violet-500/40 hover:bg-zinc-800/90': status(ev)==='future' && ev.id!==nextId() && ev.kind==='personal'
+              }"
+              :style="`top:${eTop(ev)}px;height:${eH(ev)}px;padding-top:${compact(ev)?'1px':'4px'};padding-bottom:${compact(ev)?'1px':'4px'}`">
+
+              <!-- Modo compacto: tudo numa linha -->
+              <div x-show="compact(ev)" class="flex items-center gap-1.5 leading-none h-full">
+                <span class="text-[9px] font-mono shrink-0"
+                  :class="{
+                    'text-zinc-600': status(ev)==='past',
+                    'text-cyan-300': ev.id===nextId(),
+                    'text-orange-400': ev.id!==nextId() && ev.kind==='work' && status(ev)!=='past',
+                    'text-violet-400': ev.id!==nextId() && ev.kind==='personal' && status(ev)!=='past'
+                  }"
+                  x-text="ev.start_time"></span>
+                <span class="text-[10px] truncate"
+                  :class="{
+                    'text-zinc-500': status(ev)==='past',
+                    'text-cyan-100 font-medium': ev.id===nextId(),
+                    'text-zinc-100': ev.id!==nextId() && status(ev)!=='past'
+                  }"
+                  x-text="ev.title"></span>
+              </div>
+
+              <!-- Modo completo: duas linhas -->
+              <div x-show="!compact(ev)">
+                <div class="flex items-center gap-1.5 leading-tight">
+                  <span class="text-[9px] font-mono"
+                    :class="{
+                      'text-zinc-600': status(ev)==='past',
+                      'text-cyan-300': ev.id===nextId(),
+                      'text-orange-400': ev.id!==nextId() && ev.kind==='work' && status(ev)!=='past',
+                      'text-violet-400': ev.id!==nextId() && ev.kind==='personal' && status(ev)!=='past'
+                    }"
+                    x-text="ev.start_time"></span>
+                  <span x-show="ev.id===nextId()" class="text-[9px] text-cyan-500/70 font-mono"
+                    x-text="`· em ${fmt(minsUntil())}`"></span>
+                </div>
+                <div class="text-xs truncate leading-tight mt-0.5"
+                  :class="{
+                    'text-zinc-500': status(ev)==='past',
+                    'text-cyan-100 font-medium': ev.id===nextId(),
+                    'text-zinc-100': ev.id!==nextId() && status(ev)!=='past'
+                  }"
+                  x-text="ev.title"></div>
+              </div>
+            </a>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- EVENTOS PENDENTES -->
+    <div x-show="pendingEvents.length > 0" class="mb-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="section-label" style="color:#fb923c">⏳ Confirmar</span>
+        <span class="text-[10px] font-bold font-mono" style="color:#fb923c" x-text="pendingEvents.length"></span>
+      </div>
+      <div class="flex flex-col gap-2">
+        <template x-for="ev in pendingEvents" :key="ev.id">
+          <div class="rounded-lg p-2.5" style="background:rgba(251,146,60,0.07);border:1px solid rgba(251,146,60,0.2)">
+            <div class="flex items-center gap-1 mb-1.5">
+              <input x-model="ev.title" @change="patchPending(ev)"
+                class="flex-1 min-w-0 text-xs text-slate-200 font-medium bg-transparent border-b border-transparent hover:border-slate-600 focus:border-orange-400 outline-none truncate" />
+            </div>
+            <div class="flex items-center gap-1.5 mb-2 flex-wrap">
+              <input type="date" x-model="ev.event_date" @change="patchPending(ev)"
+                class="text-[10px] font-mono text-slate-400 bg-transparent border-b border-transparent hover:border-slate-600 focus:border-orange-400 outline-none w-[90px]" />
+              <span class="text-slate-600 text-[10px]">às</span>
+              <input type="time" x-model="ev.event_time" @change="patchPending(ev)"
+                class="text-[10px] font-mono text-slate-400 bg-transparent border-b border-transparent hover:border-slate-600 focus:border-orange-400 outline-none w-[52px]" />
+              <span class="text-slate-600 text-[10px]">por</span>
+              <select x-model="ev.duration_hours" @change="patchPending(ev)"
+                class="text-[10px] font-mono text-slate-400 bg-transparent border-b border-transparent hover:border-slate-600 focus:border-orange-400 outline-none">
+                <option value="0.25">15min</option>
+                <option value="0.5">30min</option>
+                <option value="0.75">45min</option>
+                <option value="1">1h</option>
+                <option value="1.5">1h30</option>
+                <option value="2">2h</option>
+                <option value="3">3h</option>
+              </select>
+            </div>
+            <div class="flex gap-1.5">
+              <button @click="confirmPending(ev)"
+                class="flex-1 text-[10px] font-bold px-2 py-1 rounded transition-colors"
+                style="background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.3)">
+                ✓ confirmar
+              </button>
+              <button @click="rejectPending(ev)"
+                class="text-[10px] px-2 py-1 rounded transition-colors"
+                style="background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.2)">
+                ×
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- OVERDUE -->
+    <div x-show="filteredOverdue.length > 0">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="section-label" style="color:#EF4444">⚠️ Atrasadas</span>
+        <span class="text-[10px] font-bold text-red-400 font-mono" x-text="filteredOverdue.length"></span>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <template x-for="task in filteredOverdue" :key="task.id">
+          <div @click="openModal(task)" class="sb-row"
+            style="border-left: 2px solid #EF4444">
+            <span class="flex-1 min-w-0 truncate text-slate-200" x-text="task.title"></span>
+            <span class="text-xs text-red-500 font-mono shrink-0" x-text="'-' + overdueDays(task.deadline) + 'd'"></span>
+            <button @click.stop="quickDone(task)" class="check-btn-sm shrink-0">✓</button>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- DUE TODAY -->
+    <div x-show="context !== 'personal'">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="section-label ac">☀️ Vence hoje</span>
+        <span x-show="filteredTodayTasks.length > 0" class="text-[10px] font-bold ac font-mono" x-text="filteredTodayTasks.length"></span>
+      </div>
+      <div x-show="filteredTodayTasks.length === 0" class="text-xs text-slate-600 italic px-1">
+        Nada pra entregar hoje 🎉
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <template x-for="task in filteredTodayTasks" :key="task.id">
+          <div @click="openModal(task)" class="sb-row">
+            <span x-text="priorityEmoji(task.priority)" class="text-xs shrink-0"></span>
+            <span class="flex-1 min-w-0 truncate text-slate-200" x-text="task.title"></span>
+            <button @click.stop="quickDone(task)" class="check-btn-sm shrink-0">✓</button>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- JIRA -->
+    <div x-show="context !== 'personal'">
+      <button @click="jiraExpanded = !jiraExpanded"
+        class="flex items-center gap-2 mb-2 w-full text-left group">
+        <span class="section-label transition-colors group-hover:text-slate-400">🟦 Jira</span>
+        <span x-show="unlinkedJira.length > 0"
+          class="text-[10px] font-bold text-yellow-400 font-mono"
+          x-text="unlinkedJira.length + ' a capturar'"></span>
+        <span x-show="unlinkedJira.length === 0 && jira.length > 0"
+          class="text-[10px] text-emerald-500 font-mono">✓ tudo capturado</span>
+        <span class="ml-auto text-slate-600 text-xs transition-transform"
+          :style="jiraExpanded ? 'transform:rotate(180deg)' : ''">▾</span>
+      </button>
+
+      <div x-show="jiraExpanded">
+        <div x-show="unlinkedJira.length === 0" class="text-xs text-slate-600 italic px-1 mb-1.5">
+          <span x-show="!jiraConnected">Jira não conectado</span>
+          <span x-show="jiraConnected && unlinkedJira.length === 0">Todas capturadas ✓</span>
+        </div>
+
+        <!-- Apenas não capturadas em andamento -->
+        <div class="flex flex-col gap-1.5" x-show="unlinkedJira.some(i => !isPending(i.status))">
+          <template x-for="issue in unlinkedJira.filter(i => !isPending(i.status))" :key="issue.key">
+            <a :href="issue.url" target="_blank" class="sb-row">
+              <span class="font-mono text-xs ac shrink-0" x-text="issue.key"></span>
+              <span class="flex-1 min-w-0 truncate text-slate-200" x-text="issue.summary"></span>
+              <span @click.prevent="suggestJiraCapture(issue)"
+                class="text-[10px] text-yellow-400 hover:text-yellow-300 shrink-0 cursor-pointer transition-colors">+ capturar</span>
+            </a>
+          </template>
+        </div>
+
+        <!-- Pendente não capturado -->
+        <div x-show="unlinkedJira.some(i => isPending(i.status))" class="mt-2">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">Pendente</p>
+          <div class="flex flex-col gap-1.5">
+            <template x-for="issue in unlinkedJira.filter(i => isPending(i.status))" :key="issue.key">
+              <a :href="issue.url" target="_blank" class="sb-row" style="opacity:0.65">
+                <span class="font-mono text-xs text-slate-500 shrink-0" x-text="issue.key"></span>
+                <span class="flex-1 min-w-0 truncate text-slate-400" x-text="issue.summary"></span>
+                <span x-show="!isJiraLinked(issue.key)"
+                  @click.prevent="suggestJiraCapture(issue)"
+                  class="text-[10px] text-yellow-400 hover:text-yellow-300 shrink-0 cursor-pointer transition-colors">+ capturar</span>
+              </a>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+</div>
+
+<!-- ── TASK MODAL ─────────────────────────────────────────────────────────── -->
+<div x-show="modal.show" x-cloak
+  class="fixed inset-0 z-40 flex items-start justify-center py-8 px-4 overflow-y-auto"
+  style="background:rgba(0,0,0,0.7);backdrop-filter:blur(4px)"
+  @click.self="closeModal()">
+  <div class="card w-full max-w-2xl shadow-2xl slide-up">
+    <template x-if="modal.task">
+      <div class="p-6">
+        <div class="flex items-start justify-between mb-4 gap-3">
+          <div class="flex-1 flex items-center gap-2">
+            <span x-show="modal.task.project_slug" class="badge shrink-0"
+              :class="getProjectContext(modal.task.project_slug) === 'personal' ? 'ctx-ps' : 'ctx-hm'"
+              x-text="getProjectContext(modal.task.project_slug) === 'personal' ? 'Pessoal' : 'Hotmart'"></span>
+            <input x-model="modal.task.title" @input="modalAutosave('title', modal.task.title)"
+              type="text"
+              class="flex-1 bg-transparent text-lg font-bold text-white focus:outline-none border-b pb-1"
+              style="border-color:var(--border);border-radius:0" />
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="font-mono text-xs text-slate-600" x-text="'#' + modal.task.short_id"></span>
+            <button @click="closeModal()" class="text-slate-500 hover:text-slate-200 text-xl leading-none transition-colors">×</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+          <select x-model="modal.task.project_slug" @change="modalAutosave('project_slug', modal.task.project_slug || null)"
+            class="px-2 py-1.5 text-xs">
+            <option value="">📁 Sem projeto</option>
+            <template x-for="p in projects" :key="p.slug">
+              <option :value="p.slug" x-text="p.name"></option>
+            </template>
+          </select>
+          <input x-model="modal.task.deadline" @change="modalAutosave('deadline', modal.task.deadline)"
+            type="date" class="px-2 py-1.5 text-xs" />
+          <select x-model="modal.task.priority" @change="modalAutosave('priority', modal.task.priority)"
+            class="px-2 py-1.5 text-xs">
+            <option value="p1">🔺 Urgente</option>
+            <option value="p2">🔸 Alta</option>
+            <option value="p3">⚪ Normal</option>
+            <option value="backlog">⬜ Backlog</option>
+          </select>
+          <select x-model="modal.task.status" @change="modalAutosave('status', modal.task.status)"
+            class="px-2 py-1.5 text-xs">
+            <option value="todo">⚪ A fazer</option>
+            <option value="doing">🟡 Fazendo</option>
+            <option value="blocked">🔴 Bloqueada</option>
+            <option value="done">✅ Feita</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 mb-4">
+          <div>
+            <p class="text-xs font-bold text-slate-500 mb-1">Estimativa (h)</p>
+            <input x-model.number="modal.task.estimated_hours"
+              @change="modalAutosave('estimated_hours', modal.task.estimated_hours || null)"
+              type="number" min="0" step="0.5" placeholder="0"
+              class="w-full px-3 py-1.5 text-xs" />
+          </div>
+          <div>
+            <p class="text-xs font-bold text-slate-500 mb-1">Horas gastas (h)</p>
+            <input x-model.number="modal.task.actual_hours"
+              @change="modalAutosave('actual_hours', modal.task.actual_hours || null)"
+              type="number" min="0" step="0.5" placeholder="0"
+              class="w-full px-3 py-1.5 text-xs" />
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <p class="text-xs font-bold text-slate-500 mb-1.5">Notas</p>
+          <textarea x-model="modal.task.description" @input="modalAutosave('description', modal.task.description)"
+            rows="4" placeholder="Contexto, referências, links…"
+            class="w-full px-3 py-2 text-sm placeholder-slate-700"></textarea>
+        </div>
+
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-bold text-slate-500">Checklist</p>
+            <button x-show="modal.checklist.length > 0" @click="modal.focusMode = true"
+              class="text-xs text-slate-600 hover:text-white transition-colors flex items-center gap-1">
+              🎯 foco
+            </button>
+          </div>
+          <div class="flex flex-col gap-1 mb-2">
+            <template x-for="item in modal.checklist" :key="item.id">
+              <div class="flex items-center gap-2 group rounded px-1 transition-opacity"
+                draggable="true"
+                @dragstart="dragStart($event, item)"
+                @dragover.prevent="dragOver($event, item)"
+                @drop.prevent="drop($event, item)"
+                @dragend="dragEnd()"
+                :style="modal.dragOverItem?.id === item.id ? 'opacity:0.35;outline:1px dashed var(--border2);border-radius:6px' : ''">
+                <span class="text-slate-700 group-hover:text-slate-500 text-sm shrink-0 select-none"
+                  style="cursor:grab;line-height:1">⠿</span>
+                <input type="checkbox" :checked="item.done" @change="toggleChecklist(item)"
+                  class="rounded shrink-0" style="accent-color:var(--accent);cursor:pointer" />
+                <input x-model="item.text" @change="updateChecklistText(item)"
+                  :class="item.done ? 'line-through text-slate-600' : 'text-slate-300'"
+                  class="flex-1 bg-transparent text-sm focus:outline-none border-b border-transparent focus:border-slate-700" />
+                <button @click="deleteChecklistItem(item)"
+                  class="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-400 text-xs transition-opacity shrink-0">×</button>
+              </div>
+            </template>
+          </div>
+          <input x-model="modal.newChecklistText" @keydown.enter="addChecklistItem()"
+            placeholder="+ item (Enter)" class="w-full px-3 py-1.5 text-xs placeholder-slate-700" />
+        </div>
+
+        <div class="mb-4">
+          <p class="text-xs font-bold text-slate-500 mb-2">Links</p>
+          <div class="flex flex-col gap-1 mb-2">
+            <template x-for="link in modal.links" :key="link.id">
+              <div class="flex items-center gap-2 group">
+                <span class="text-xs ac">🔗</span>
+                <a :href="link.url" target="_blank" class="flex-1 text-xs truncate hover:underline ac"
+                   x-text="link.label || link.url"></a>
+                <button @click="deleteLink(link)"
+                  class="opacity-0 group-hover:opacity-100 text-red-500 text-xs transition-opacity">×</button>
+              </div>
+            </template>
+          </div>
+          <div class="flex gap-2" x-show="modal.addingLink">
+            <input x-model="modal.newLinkUrl" placeholder="https://…" type="url"
+              class="flex-1 px-3 py-1.5 text-xs placeholder-slate-700" />
+            <input x-model="modal.newLinkLabel" placeholder="Drive, Figma…"
+              class="w-28 px-3 py-1.5 text-xs placeholder-slate-700" />
+            <button @click="addLink()" class="text-xs font-semibold ac px-2">OK</button>
+            <button @click="modal.addingLink = false" class="text-xs text-slate-500 px-2">×</button>
+          </div>
+          <button x-show="!modal.addingLink" @click="modal.addingLink = true"
+            class="text-xs text-slate-600 hover:text-slate-400 transition-colors">+ link</button>
+        </div>
+
+        <div class="mb-4">
+          <p class="text-xs font-bold text-slate-500 mb-2">Subtasks</p>
+          <div class="flex flex-col gap-1 mb-2">
+            <template x-for="sub in modal.subtasks" :key="sub.id">
+              <div class="flex items-center gap-2">
+                <input type="checkbox" :checked="sub.status === 'done'" @change="quickDoneSubtask(sub)"
+                  class="rounded" style="accent-color:var(--accent)" />
+                <span :class="sub.status === 'done' ? 'line-through text-slate-600' : 'text-slate-300'"
+                  class="flex-1 text-xs" x-text="sub.title"></span>
+                <span class="font-mono text-xs text-slate-600" x-text="'#' + sub.short_id"></span>
+              </div>
+            </template>
+          </div>
+          <div class="flex gap-2" x-show="modal.addingSubtask">
+            <input x-model="modal.newSubtaskTitle" @keydown.enter="addSubtask()"
+              placeholder="Subtask (Enter)" class="flex-1 px-3 py-1.5 text-xs placeholder-slate-700" />
+            <button @click="modal.addingSubtask = false" class="text-xs text-slate-500 px-2">×</button>
+          </div>
+          <button x-show="!modal.addingSubtask" @click="modal.addingSubtask = true"
+            class="text-xs text-slate-600 hover:text-slate-400 transition-colors">+ subtask</button>
+        </div>
+
+        <!-- Jira link -->
+        <div class="mb-4" x-data="{ open: false, search: '' }">
+          <p class="text-xs font-bold text-slate-500 mb-1.5">Issue Jira</p>
+
+          <!-- linked state -->
+          <div x-show="modal.task.jira_key" class="flex items-center gap-2">
+            <span class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono"
+              style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:#60A5FA">
+              🟦 <span x-text="modal.task.jira_key"></span>
+            </span>
+            <a :href="jiraBaseUrl + '/browse/' + modal.task.jira_key" target="_blank"
+              class="text-xs text-slate-500 hover:text-slate-300 transition-colors truncate max-w-[200px]"
+              x-text="jira.find(i => i.key === modal.task.jira_key)?.summary || '↗ abrir no Jira'"></a>
+            <button @click="syncFromJira()" title="Puxar descrição e deadline do Jira"
+              class="text-xs text-slate-600 hover:text-cyan-400 transition-colors shrink-0">↻ sync</button>
+            <button @click="modal.task.jira_key = ''; modalAutosave('jira_key', null)"
+              class="text-xs text-slate-600 hover:text-red-400 transition-colors ml-auto shrink-0">× desvincular</button>
+          </div>
+
+          <!-- unlinked state: picker trigger -->
+          <div x-show="!modal.task.jira_key" class="relative">
+            <button @click="open = !open; search = ''"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors w-full text-left"
+              style="background:var(--surface);border:1px solid var(--border)">
+              <span class="text-slate-500">🟦 Vincular ao Jira</span>
+              <span class="ml-auto text-slate-600" :style="open ? 'transform:rotate(180deg)' : ''">▾</span>
+            </button>
+
+            <!-- dropdown -->
+            <div x-show="open" @click.outside="open = false"
+              class="absolute left-0 top-full mt-1 w-full z-50 rounded-xl shadow-2xl overflow-hidden slide-up"
+              style="background:var(--card);border:1px solid var(--border2);max-height:260px;display:flex;flex-direction:column">
+
+              <!-- search -->
+              <div class="p-2" style="border-bottom:1px solid var(--border)">
+                <input x-model="search" @click.stop placeholder="Buscar issue…"
+                  class="w-full px-2 py-1.5 text-xs placeholder-slate-600"
+                  style="background:var(--surface)" />
+              </div>
+
+              <!-- list -->
+              <div style="overflow-y:auto">
+                <template x-if="jira.length === 0">
+                  <p class="text-xs text-slate-600 italic p-3">Nenhuma issue ativa no Jira</p>
+                </template>
+                <template x-for="issue in jira.filter(i => !search || i.key.toLowerCase().includes(search.toLowerCase()) || i.summary.toLowerCase().includes(search.toLowerCase()))" :key="issue.key">
+                  <button @click="modal.task.jira_key = issue.key; modalAutosave('jira_key', issue.key); open = false"
+                    class="flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors hover:bg-slate-800"
+                    style="border-bottom:1px solid var(--border)">
+                    <span class="font-mono text-xs text-blue-400 shrink-0" x-text="issue.key"></span>
+                    <span class="flex-1 text-xs text-slate-200 min-w-0 truncate" x-text="issue.summary"></span>
+                    <span x-show="issue.due_date"
+                      class="text-[10px] font-mono text-slate-500 shrink-0" x-text="issue.due_date"></span>
+                  </button>
+                </template>
+                <template x-if="jira.filter(i => !search || i.key.toLowerCase().includes(search.toLowerCase()) || i.summary.toLowerCase().includes(search.toLowerCase())).length === 0 && search">
+                  <p class="text-xs text-slate-600 italic p-3">Nenhuma issue encontrada</p>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-4 mb-4" style="border-top:1px solid var(--border)">
+          <p class="text-xs text-slate-600">
+            Capturada <span x-text="formatDatetime(modal.task.created_at)"></span>
+            via <span x-text="modal.task.source"></span>
+          </p>
+          <p x-show="modal.task.raw_input" class="text-xs text-slate-600 italic mt-0.5"
+            x-text="'Original: &quot;' + modal.task.raw_input + '&quot;'"></p>
+          <p x-show="modal.task.reviewed_at" class="text-xs text-slate-600 mt-0.5"
+            x-text="'Revisada ' + formatDatetime(modal.task.reviewed_at)"></p>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <button @click="deleteTaskFromModal()"
+            class="text-xs px-3 py-2 rounded-lg text-red-500 hover:text-red-400 transition-colors"
+            style="border:1px solid rgba(239,68,68,0.2)">🗑 excluir</button>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-600">auto-save · Esc fecha</span>
+            <button @click="closeModal()"
+              class="text-xs text-slate-400 hover:text-slate-200 px-3 py-2 rounded-lg transition-colors"
+              style="border:1px solid var(--border2)">Fechar</button>
+            <button x-show="modal.task.reviewed === 0" @click="reviewFromModal()"
+              class="text-xs font-semibold px-3 py-2 rounded-lg text-emerald-400 hover:text-emerald-300 transition-colors"
+              style="border:1px solid rgba(52,211,153,0.2)">✓ revisada</button>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>
+
+<!-- ── FOCUS MODE ──────────────────────────────────────────────────────────── -->
+<div x-show="modal.focusMode" x-cloak
+  @keydown.escape.window="modal.focusMode = false"
+  class="fixed inset-0 z-[200] flex flex-col"
+  style="background:#06090F">
+
+  <!-- top bar -->
+  <div class="flex items-center justify-between px-8 py-5 shrink-0" style="border-bottom:1px solid var(--border)">
+    <div class="flex items-center gap-3 min-w-0">
+      <span x-show="modal.task?.project_slug" class="badge ctx-hm text-[10px] shrink-0"
+        x-text="modal.task?.project_slug"></span>
+      <h2 class="text-xl font-bold text-white truncate" x-text="modal.task?.title"></h2>
+    </div>
+    <div class="flex items-center gap-4 shrink-0">
+      <span class="text-sm font-mono text-slate-500">
+        <span class="text-white font-bold" x-text="modal.checklist.filter(i=>i.done).length"></span>
+        <span x-text="' / ' + modal.checklist.length"></span>
+      </span>
+      <button @click="modal.focusMode = false"
+        class="text-slate-500 hover:text-white transition-colors text-2xl leading-none">×</button>
+    </div>
+  </div>
+
+  <!-- progress bar -->
+  <div class="h-1 shrink-0" style="background:var(--border)">
+    <div class="h-full transition-all duration-300" style="background:var(--accent)"
+      :style="'width:' + (modal.checklist.length ? Math.round(modal.checklist.filter(i=>i.done).length / modal.checklist.length * 100) : 0) + '%'">
+    </div>
+  </div>
+
+  <!-- checklist -->
+  <div class="flex-1 overflow-y-auto px-8 py-8">
+    <div class="max-w-2xl mx-auto flex flex-col gap-3">
+      <template x-for="item in modal.checklist" :key="item.id">
+        <label class="flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-colors group"
+          style="background:var(--card);border:1px solid var(--border)"
+          :class="item.done ? 'opacity-50' : 'hover:border-slate-600'">
+          <input type="checkbox" :checked="item.done" @change="toggleChecklist(item)"
+            class="w-5 h-5 rounded shrink-0" style="accent-color:var(--accent);cursor:pointer" />
+          <span class="text-base flex-1 transition-all"
+            :class="item.done ? 'line-through text-slate-500' : 'text-slate-100'"
+            x-text="item.text"></span>
+        </label>
+      </template>
+
+      <!-- add item inline -->
+      <div class="flex items-center gap-3 px-4 py-3 rounded-xl mt-2"
+        style="background:var(--card);border:1px dashed var(--border)">
+        <span class="text-slate-700 text-lg">+</span>
+        <input x-model="modal.newChecklistText" @keydown.enter="addChecklistItem()"
+          placeholder="Adicionar item (Enter)"
+          class="flex-1 bg-transparent text-base text-slate-300 placeholder-slate-700 focus:outline-none" />
+      </div>
+    </div>
+  </div>
+
+  <!-- done state -->
+  <div x-show="modal.checklist.length > 0 && modal.checklist.every(i => i.done)"
+    class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+    <p class="text-6xl mb-4">✅</p>
+    <p class="text-2xl font-bold text-white">Tudo feito!</p>
+  </div>
+</div>
+
+<!-- ── NEW PROJECT MODAL ───────────────────────────────────────────────────── -->
+<div x-show="newProjectModal.show" x-cloak
+  class="fixed inset-0 z-50 flex items-center justify-center px-4"
+  style="background:rgba(0,0,0,0.7);backdrop-filter:blur(4px)"
+  @click.self="newProjectModal.show = false; newProjectModal._callback = null">
+  <div class="card w-full max-w-md p-6 shadow-2xl slide-up">
+    <h3 class="text-base font-bold text-white mb-4">Novo Projeto</h3>
+    <div class="flex flex-col gap-3">
+      <input x-model="newProjectModal.name" placeholder="Nome do projeto"
+        class="w-full px-3 py-2 placeholder-slate-600" />
+      <textarea x-model="newProjectModal.description" placeholder="Descrição breve" rows="2"
+        class="w-full px-3 py-2 placeholder-slate-600"></textarea>
+      <div class="flex gap-2 items-center">
+        <input x-model="newProjectModal.deadline" type="date" class="flex-1 px-3 py-2" />
+        <input x-model="newProjectModal.color" type="color"
+          class="w-11 h-9 rounded-lg cursor-pointer p-0.5"
+          style="background:var(--surface);border:1px solid var(--border)" />
+        <div class="flex rounded-lg overflow-hidden" style="border:1px solid var(--border)">
+          <button @click="newProjectModal.context = 'hotmart'"
+            :class="newProjectModal.context === 'hotmart' ? 'ctx-hm' : 'text-slate-500'"
+            class="text-xs font-bold px-3 py-2 transition-all">HM</button>
+          <button @click="newProjectModal.context = 'personal'"
+            :class="newProjectModal.context === 'personal' ? 'ctx-ps' : 'text-slate-500'"
+            class="text-xs font-bold px-3 py-2 transition-all">PS</button>
+        </div>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button @click="newProjectModal.show = false; newProjectModal._callback = null"
+        class="text-xs text-slate-400 px-3 py-2 rounded-lg transition-colors"
+        style="border:1px solid var(--border2)">Cancelar</button>
+      <button @click="saveNewProject()"
+        class="text-xs font-bold text-white px-4 py-2 rounded-lg transition-colors bg-ac">Criar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ALPINE ──────────────────────────────────────────────────────────────── -->
+<script>
+const API = 'http://localhost:8000';
+
+const CONTEXT_COLORS = {
+  hotmart:  { accent: '#FF5A1F', a10: 'rgba(255,90,31,0.10)',  a20: 'rgba(255,90,31,0.22)'  },
+  personal: { accent: '#22D3EE', a10: 'rgba(34,211,238,0.10)', a20: 'rgba(34,211,238,0.22)' },
+};
+
+const DEFAULT_PROJECT_BY_CONTEXT = {
+  hotmart: 'hotmart',
+  personal: 'pessoal',
+};
+
+function pedroOS() {
+  return {
+    context: localStorage.getItem('pedro_context') || 'hotmart',
+
+    // data
+    inbox: [], inboxExpanded: false,
+    todayTasks: [], overdue: [],
+    allTasks: [],
+    projects: [],
+    meetings: [],
+    personalEvents: [],
+    pendingEvents: [],
+    jira: [],
+
+    // modal state
+    modal: {
+      show: false, task: null, checklist: [], links: [], subtasks: [], focusMode: false,
+      newChecklistText: '', newLinkUrl: '', newLinkLabel: '',
+      newSubtaskTitle: '', addingLink: false, addingSubtask: false,
+      dragItem: null, dragOverItem: null,
+    },
+    newProjectModal: {
+      show: false, name: '', description: '', deadline: '',
+      color: '#FF5A1F', context: 'hotmart', _callback: null,
+    },
+
+    // ui state
+    waConnected: false, calConnected: false, jiraConnected: false,
+    jiraExpanded: false,
+    calOffset: 0,
+    _sortMode: 'default',
+    _calSig: '', _jiraSig: '',
+    jiraBaseUrl: 'https://hotmart.atlassian.net',
+    showQR: false, qrDataUrl: null,
+    quickTitle: '',
+    _pendingJiraKey: null,
+    toasts: [],
+    todayStr: new Date().toISOString().split('T')[0],
+    _blDragItem: null,
+    _blDragSourceGroup: null,
+    _blDragOver: null,
+    _projDragItem: null,
+    _projDragOver: null,
+    doneTasks: [],
+    showDone: false,
+    currentTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    _modalDebounce: {},
+
+    // ── init ──────────────────────────────────────────────────────────────
+    async init() {
+      this.applyContextColors();
+      await this.loadAll();
+      this.setupKeyboard();
+      this.startPolling();
+    },
+
+    async loadAll() {
+      await Promise.all([
+        this.loadProjects(),
+        this.loadInbox(),
+        this.loadToday(),
+        this.loadAllTasks(),
+        this.loadMeetings(),
+        this.loadJira(),
+        this.loadPersonalCalendar(),
+        this.loadPendingEvents(),
+      ]);
+      this.updateTitle();
+    },
+
+    // ── context ───────────────────────────────────────────────────────────
+    setContext(ctx) {
+      this.context = ctx;
+      localStorage.setItem('pedro_context', ctx);
+      this.applyContextColors();
+    },
+
+    applyContextColors() {
+      const c = CONTEXT_COLORS[this.context];
+      document.documentElement.style.setProperty('--accent', c.accent);
+      document.documentElement.style.setProperty('--accent-10', c.a10);
+      document.documentElement.style.setProperty('--accent-20', c.a20);
+    },
+
+    getProjectContext(slug) {
+      if (!slug) return this.context; // sem projeto: usa contexto atual
+      const stored = JSON.parse(localStorage.getItem('pedro_proj_ctx') || '{}');
+      if (stored[slug] !== undefined) return stored[slug];
+      const personalKeywords = ['pessoal', 'personal', 'vida', 'casa', 'saude', 'hobby'];
+      return personalKeywords.some(k => slug.includes(k)) ? 'personal' : 'hotmart';
+    },
+
+    taskMatchesContext(task) {
+      return this.getProjectContext(task.project_slug) === this.context;
+    },
+
+    // ── data loaders ──────────────────────────────────────────────────────
+    async loadInbox() {
+      const tasks = await this.api('/api/tasks?reviewed=0');
+      this.inbox = tasks || [];
+      this.updateTitle();
+    },
+
+    async loadToday() {
+      const [today, overdue] = await Promise.all([
+        this.api('/api/tasks?reviewed=1&deadline=today'),
+        this.api('/api/tasks?reviewed=1&deadline=overdue'),
+      ]);
+      this.todayTasks = (today || []).filter(t => t.status !== 'done');
+      this.overdue = (overdue || []).filter(t => t.status !== 'done');
+    },
+
+    async loadAllTasks() {
+      const all = await this.api('/api/tasks?reviewed=1');
+      this.allTasks = (all || []).filter(t => t.status !== 'done');
+    },
+
+    async loadDoneTasks() {
+      const all = await this.api('/api/tasks?status=done');
+      this.doneTasks = (all || []).filter(t => this.getProjectContext(t.project_slug) === this.context);
+    },
+
+    async loadProjects() {
+      this.projects = (await this.api('/api/projects?active=1')) || [];
+    },
+
+    async loadMeetings() {
+      const dateParam = this.calOffset !== 0 ? `?date=${this.calDate()}` : '';
+      const res = await this.api(`/api/meetings/today${dateParam}`);
+      if (!res) return;
+      if (res.connected || !this.calConnected) this.calConnected = !!res.connected;
+      if (res.connected) this.meetings = res.events || [];
+    },
+
+    async loadPersonalCalendar() {
+      const dateParam = this.calOffset !== 0 ? `?date=${this.calDate()}` : '';
+      const res = await this.api(`/api/meetings/personal${dateParam}`);
+      if (res?.connected) this.personalEvents = res.events || [];
+    },
+
+    calDate() {
+      const d = new Date(); d.setDate(d.getDate() + this.calOffset);
+      return d.toISOString().split('T')[0];
+    },
+
+    calOffsetLabel() {
+      if (this.calOffset === 0) return 'hoje';
+      if (this.calOffset === 1) return 'amanhã';
+      if (this.calOffset === -1) return 'ontem';
+      const d = new Date(); d.setDate(d.getDate() + this.calOffset);
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    },
+
+    async shiftCal(delta) {
+      const max = 3, min = -3;
+      this.calOffset = Math.max(min, Math.min(max, this.calOffset + delta));
+      await Promise.all([this.loadMeetings(), this.loadPersonalCalendar()]);
+    },
+
+    async loadPendingEvents() {
+      const res = await this.api('/api/calendar/pending');
+      this.pendingEvents = res || [];
+    },
+
+    async patchPending(ev) {
+      await this.api(`/api/calendar/pending/${ev.id}`, 'PATCH', {
+        title: ev.title, event_date: ev.event_date, event_time: ev.event_time,
+        duration_hours: parseFloat(ev.duration_hours) || 1,
+      });
+    },
+
+    async confirmPending(ev) {
+      const res = await this.api(`/api/calendar/pending/${ev.id}/confirm`, 'POST', {});
+      if (res?.ok) {
+        this.pendingEvents = this.pendingEvents.filter(e => e.id !== ev.id);
+        this.showToast('✅ Evento criado na agenda Particular');
+        this.loadPersonalCalendar();
+      } else {
+        this.showToast('❌ Erro ao confirmar — verifique OAuth do Google');
+      }
+    },
+
+    async rejectPending(ev) {
+      await this.api(`/api/calendar/pending/${ev.id}`, 'DELETE');
+      this.pendingEvents = this.pendingEvents.filter(e => e.id !== ev.id);
+    },
+
+    async resetWA() {
+      try {
+        await fetch('http://localhost:3000/reset', { method: 'POST' });
+        this.waConnected = false;
+        this.qrDataUrl = null;
+        this.showQR = true;
+        this.showToast('↺ Sessão resetada — escaneie o QR code');
+      } catch {
+        this.showToast('❌ Gateway WhatsApp não responde');
+      }
+    },
+
+    async connectCalendar() {
+      const res = await this.api('/api/auth/google');
+      if (res?.url) {
+        window.open(res.url, '_blank', 'width=500,height=620');
+        this.showToast('📅 Autorize no popup e volte aqui — o calendar atualiza em 30s');
+      } else {
+        this.showToast('⚠️ GOOGLE_CLIENT_ID não configurado no .env');
+      }
+    },
+
+    async loadJira() {
+      const res = await this.api('/api/jira/active');
+      if (!res) return;
+      if (res.connected || !this.jiraConnected) this.jiraConnected = !!res.connected;
+      if (res.connected) {
+        const issues = res.issues || [];
+        issues.sort((a, b) => {
+          const ap = this.isPending(a.status), bp = this.isPending(b.status);
+          if (ap !== bp) return ap ? 1 : -1;
+          if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
+          if (a.due_date) return -1;
+          if (b.due_date) return 1;
+          return a.key.localeCompare(b.key);
+        });
+        this.jira = issues;
+      }
+    },
+
+    openProject(group) {
+      // Stub: por enquanto só foca no projeto via modal (futuro: tela de projeto)
+    },
+
+    // ── computed ──────────────────────────────────────────────────────────
+    get filteredTodayTasks() {
+      return this.todayTasks.filter(t => this.taskMatchesContext(t));
+    },
+    get filteredOverdue() {
+      return this.overdue.filter(t => this.taskMatchesContext(t));
+    },
+
+    get dumpGroups() {
+      const map = {};
+      const noProj = { slug: '__none__', name: 'Sem projeto', color: '#374151', tasks: [] };
+
+      for (const proj of this.projects) {
+        if (!proj.active) continue;
+        if (this.getProjectContext(proj.slug) !== this.context) continue;
+        map[proj.slug] = { ...proj, tasks: [] };
+      }
+
+      for (const task of this.allTasks) {
+        if (task.parent_id) continue; // subtasks shown nested under parent
+        const slug = task.project_slug;
+        if (!slug) {
+          if (this.context === 'hotmart') noProj.tasks.push(task);
+          continue;
+        }
+        if (map[slug]) {
+          map[slug].tasks.push(task);
+        } else if (this.getProjectContext(slug) === this.context) {
+          // projeto não está em this.projects mas pertence ao contexto
+          map[slug] = { slug, name: slug, color: '#374151', tasks: [task] };
+        }
+      }
+
+      // se qualquer task do grupo tiver position definida, ordenar por position
+      const sortTasks = (a, b) => {
+        const hasPos = a.position != null || b.position != null;
+        if (hasPos) {
+          const posA = a.position ?? 99999;
+          const posB = b.position ?? 99999;
+          if (posA !== posB) return posA - posB;
+        }
+        const prio = { p1: 0, p2: 1, p3: 2, backlog: 3 };
+        const pa = prio[a.priority] ?? 2;
+        const pb = prio[b.priority] ?? 2;
+        if (pa !== pb) return pa - pb;
+        if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+        if (a.deadline) return -1;
+        if (b.deadline) return 1;
+        return (a.created_at || '').localeCompare(b.created_at || '');
+      };
+
+      const groups = Object.values(map).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+      for (const g of groups) g.tasks.sort(sortTasks);
+      noProj.tasks.sort(sortTasks);
+
+      const filtered = groups.filter(g => g.tasks.length > 0);
+      if (noProj.tasks.length > 0) filtered.push(noProj);
+      return filtered;
+    },
+
+    get flatTasks() {
+      const tasks = this.allTasks.filter(t => !t.parent_id && this.taskMatchesContext(t));
+      const prio = { p1: 0, p2: 1, p3: 2, backlog: 3 };
+      if (this._sortMode === 'deadline') {
+        return [...tasks].sort((a, b) => {
+          if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+          if (a.deadline) return -1;
+          if (b.deadline) return 1;
+          return (prio[a.priority] ?? 2) - (prio[b.priority] ?? 2);
+        });
+      }
+      // default: doing first → position → priority → deadline
+      return [...tasks].sort((a, b) => {
+        const doingA = a.status === 'doing' ? 0 : 1, doingB = b.status === 'doing' ? 0 : 1;
+        if (doingA !== doingB) return doingA - doingB;
+        const posA = a.position ?? 99999, posB = b.position ?? 99999;
+        if (posA !== posB) return posA - posB;
+        const pa = prio[a.priority] ?? 2, pb = prio[b.priority] ?? 2;
+        if (pa !== pb) return pa - pb;
+        if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+        if (a.deadline) return -1;
+        if (b.deadline) return 1;
+        return (a.created_at || '').localeCompare(b.created_at || '');
+      });
+    },
+
+    taskGroup(task) {
+      return this.dumpGroups.find(g => g.slug === (task.project_slug || '__none__'))
+        || { slug: task.project_slug || '__none__', tasks: this.flatTasks };
+    },
+
+    get totalDumpCount() {
+      return this.flatTasks.length;
+    },
+
+    get unlinkedJira() {
+      const linkedKeys = new Set(this.allTasks.map(t => t.jira_key).filter(Boolean));
+      return this.jira.filter(issue => !linkedKeys.has(issue.key));
+    },
+
+    isJiraLinked(key) {
+      return this.allTasks.some(t => t.jira_key === key);
+    },
+
+    get subtasksByParent() {
+      const map = {};
+      for (const task of this.allTasks) {
+        if (!task.parent_id) continue;
+        if (!map[task.parent_id]) map[task.parent_id] = [];
+        map[task.parent_id].push(task);
+      }
+      return map;
+    },
+
+    statusChipClass(status) {
+      return {
+        todo:    'text-slate-500 border-slate-700',
+        doing:   'text-yellow-400 border-yellow-800',
+        blocked: 'text-red-400 border-red-900',
+        done:    'text-emerald-400 border-emerald-900',
+      }[status] || 'text-slate-500 border-slate-700';
+    },
+
+    statusLabel(status) {
+      return { todo: 'Aguardando', doing: 'Fazendo', blocked: 'Bloqueada', done: 'Feita' }[status] || status;
+    },
+
+    isPending(status) { return /pending/i.test(status); },
+
+    async setTaskStatus(task, status) {
+      task.status = status;
+      await this.api(`/api/tasks/${task.id}`, 'PATCH', { status });
+      if (status === 'done') {
+        this.removeTaskFromView(task.id);
+        this.showToast(`✅ Feita`);
+      }
+    },
+
+    dragStart(event, item) {
+      this.modal.dragItem = item;
+      event.dataTransfer.effectAllowed = 'move';
+    },
+    dragOver(event, item) {
+      event.preventDefault();
+      this.modal.dragOverItem = item;
+    },
+    async drop(event, item) {
+      event.preventDefault();
+      if (!this.modal.dragItem || this.modal.dragItem.id === item.id) {
+        this.modal.dragItem = null; this.modal.dragOverItem = null; return;
+      }
+      const list = this.modal.checklist;
+      const from = list.indexOf(this.modal.dragItem);
+      const to = list.indexOf(item);
+      list.splice(from, 1);
+      list.splice(to, 0, this.modal.dragItem);
+      this.modal.dragItem = null; this.modal.dragOverItem = null;
+      await Promise.all(list.map((it, i) =>
+        this.api(`/api/checklist/${it.id}`, 'PATCH', { position: i })
+      ));
+    },
+    dragEnd() { this.modal.dragItem = null; this.modal.dragOverItem = null; },
+
+    async syncFromJira() {
+      const key = this.modal.task.jira_key;
+      if (!key) return;
+      await this.loadJira();
+      const issue = this.jira.find(i => i.key === key);
+      if (!issue) { this.showToast(`⚠️ ${key} não encontrado no Jira`); return; }
+      const patch = {};
+      if (issue.due_date) patch.deadline = issue.due_date;
+      if (issue.description) patch.description = issue.description;
+      if (!Object.keys(patch).length) { this.showToast(`ℹ️ Nada a sincronizar`); return; }
+      await this.api(`/api/tasks/${this.modal.task.id}`, 'PATCH', patch);
+      if (patch.deadline) this.modal.task.deadline = patch.deadline;
+      if (patch.description) this.modal.task.description = patch.description;
+      this.showToast(`✅ ${key} sincronizado`);
+    },
+
+    async suggestJiraCapture(issue) {
+      // Se já existe task vinculada, atualiza deadline + descrição
+      const existing = this.allTasks.find(t => t.jira_key === issue.key);
+      if (existing) {
+        const patch = {};
+        if (issue.due_date) patch.deadline = issue.due_date;
+        if (issue.description) patch.description = issue.description;
+        if (Object.keys(patch).length) {
+          await this.api(`/api/tasks/${existing.id}`, 'PATCH', patch);
+          this.showToast(`✅ ${issue.key} atualizado`);
+          await this.loadAllTasks();
+        }
+        return;
+      }
+      const defaultProject = DEFAULT_PROJECT_BY_CONTEXT[this.context];
+      const payload = {
+        title: issue.summary,
+        project_slug: defaultProject,
+        jira_key: issue.key,
+        reviewed: 1,
+        source: 'dashboard',
+      };
+      if (issue.due_date) payload.deadline = issue.due_date;
+      if (issue.description) payload.description = issue.description;
+      const result = await this.api('/api/tasks', 'POST', payload);
+      if (!result || result._error) {
+        const detail = result?._detail || 'sem resposta';
+        this.showToast(`❌ ${issue.key}: ${detail}`);
+        return;
+      }
+      this.showToast(`✅ ${issue.key} capturado`);
+      await this.loadAllTasks();
+    },
+
+    // ── task actions ──────────────────────────────────────────────────────
+    async createQuickTask() {
+      if (!this.quickTitle.trim()) return;
+      const defaultProject = DEFAULT_PROJECT_BY_CONTEXT[this.context];
+      const payload = { title: this.quickTitle.trim(), project_slug: defaultProject, reviewed: 1 };
+      if (this._pendingJiraKey) payload.jira_key = this._pendingJiraKey;
+      await this.api('/api/tasks', 'POST', payload);
+      this.quickTitle = '';
+      this._pendingJiraKey = null;
+      const label = this.context === 'personal' ? 'Pessoal' : 'Hotmart';
+      this.showToast(`✅ Tarefa criada em ${label}`);
+      this.loadAllTasks();
+      this.loadToday();
+    },
+
+    async quickDone(task) {
+      await this.api(`/api/tasks/${task.id}/done`, 'POST');
+      this.showToast(`✅ #${task.short_id} concluída`);
+      this.removeTaskFromView(task.id);
+    },
+
+    async quickDoneSubtask(sub) {
+      if (sub.status === 'done') return;
+      await this.api(`/api/tasks/${sub.id}/done`, 'POST');
+      sub.status = 'done';
+    },
+
+    removeTaskFromView(id) {
+      this.inbox      = this.inbox.filter(t => t.id !== id);
+      this.todayTasks = this.todayTasks.filter(t => t.id !== id);
+      this.overdue    = this.overdue.filter(t => t.id !== id);
+      this.allTasks   = this.allTasks.filter(t => t.id !== id);
+      this.updateTitle();
+    },
+
+    // ── modal ─────────────────────────────────────────────────────────────
+    async openModal(task) {
+      const detail = await this.api(`/api/tasks/${task.id}`);
+      this.modal.task = { ...detail };
+      this.modal.checklist = detail.checklist || [];
+      this.modal.links = detail.links || [];
+      this.modal.subtasks = detail.subtasks || [];
+      this.modal.newChecklistText = '';
+      this.modal.newLinkUrl = '';
+      this.modal.newLinkLabel = '';
+      this.modal.newSubtaskTitle = '';
+      this.modal.addingLink = false;
+      this.modal.addingSubtask = false;
+      this.modal.show = true;
+    },
+
+    closeModal() {
+      this.modal.show = false;
+      this.modal.task = null;
+      this.loadAll();
+    },
+
+    modalAutosave(field, value) {
+      clearTimeout(this._modalDebounce[field]);
+      this._modalDebounce[field] = setTimeout(async () => {
+        if (!this.modal.task) return;
+        await this.api(`/api/tasks/${this.modal.task.id}`, 'PATCH', { [field]: value });
+      }, 500);
+    },
+
+    async reviewFromModal() {
+      await this.api(`/api/tasks/${this.modal.task.id}/review`, 'POST');
+      this.modal.task.reviewed = 1;
+      this.showToast('✓ Tarefa revisada');
+      this.inbox = this.inbox.filter(t => t.id !== this.modal.task.id);
+      await this.loadToday();
+      await this.loadAllTasks();
+    },
+
+    async deleteTaskFromModal() {
+      const task = this.modal.task;
+      this.closeModal();
+      await this.api(`/api/tasks/${task.id}`, 'DELETE');
+      this.removeTaskFromView(task.id);
+      this.showToast(`🗑 #${task.short_id} excluída`);
+    },
+
+    async addChecklistItem() {
+      if (!this.modal.newChecklistText.trim()) return;
+      const item = await this.api(`/api/tasks/${this.modal.task.id}/checklist`, 'POST', {
+        text: this.modal.newChecklistText.trim(),
+      });
+      this.modal.checklist.push(item);
+      this.modal.newChecklistText = '';
+    },
+
+    async toggleChecklist(item) {
+      item.done = item.done ? 0 : 1;
+      await this.api(`/api/checklist/${item.id}`, 'PATCH', { done: item.done });
+    },
+
+    async updateChecklistText(item) {
+      await this.api(`/api/checklist/${item.id}`, 'PATCH', { text: item.text });
+    },
+
+    async deleteChecklistItem(item) {
+      await this.api(`/api/checklist/${item.id}`, 'DELETE');
+      this.modal.checklist = this.modal.checklist.filter(c => c.id !== item.id);
+    },
+
+    async addLink() {
+      if (!this.modal.newLinkUrl.trim()) return;
+      const link = await this.api(`/api/tasks/${this.modal.task.id}/links`, 'POST', {
+        url: this.modal.newLinkUrl.trim(),
+        label: this.modal.newLinkLabel.trim() || null,
+      });
+      this.modal.links.push(link);
+      this.modal.newLinkUrl = '';
+      this.modal.newLinkLabel = '';
+      this.modal.addingLink = false;
+    },
+
+    async deleteLink(link) {
+      await this.api(`/api/links/${link.id}`, 'DELETE');
+      this.modal.links = this.modal.links.filter(l => l.id !== link.id);
+    },
+
+    async addSubtask() {
+      if (!this.modal.newSubtaskTitle.trim()) return;
+      const sub = await this.api('/api/tasks', 'POST', {
+        title: this.modal.newSubtaskTitle.trim(),
+        parent_id: this.modal.task.id,
+        project_slug: this.modal.task.project_slug,
+        reviewed: 1,
+      });
+      this.modal.subtasks.push(sub);
+      this.modal.newSubtaskTitle = '';
+      this.modal.addingSubtask = false;
+    },
+
+    // ── projects ──────────────────────────────────────────────────────────
+    openNewProjectModal() {
+      this.newProjectModal = {
+        show: true, name: '', description: '', deadline: '',
+        color: this.context === 'personal' ? '#22D3EE' : '#FF5A1F',
+        context: this.context,
+        _callback: null,
+      };
+    },
+
+    async saveNewProject() {
+      if (!this.newProjectModal.name.trim()) return;
+      const proj = await this.api('/api/projects', 'POST', {
+        name: this.newProjectModal.name.trim(),
+        description: this.newProjectModal.description || null,
+        deadline: this.newProjectModal.deadline || null,
+        color: this.newProjectModal.color,
+      });
+      if (proj && proj.slug) {
+        const stored = JSON.parse(localStorage.getItem('pedro_proj_ctx') || '{}');
+        stored[proj.slug] = this.newProjectModal.context;
+        localStorage.setItem('pedro_proj_ctx', JSON.stringify(stored));
+      }
+      const cb = this.newProjectModal._callback;
+      this.newProjectModal = { show: false, name: '', description: '', deadline: '', color: '#FF5A1F', context: 'hotmart', _callback: null };
+      await this.loadProjects();
+      if (cb && proj) cb(proj.slug);
+      this.showToast('📁 Projeto criado');
+    },
+
+    // ── helpers ───────────────────────────────────────────────────────────
+    projectName(slug) {
+      const p = this.projects.find(p => p.slug === slug);
+      return p ? p.name : slug;
+    },
+
+    priorityEmoji(p) {
+      return { p1: '🔺', p2: '🔸', p3: '·', backlog: '·' }[p] || '·';
+    },
+
+    priorityBarClass(p) {
+      return { p1: 'p1-bar', p2: 'p2-bar', p3: 'p3-bar', backlog: 'pb-bar' }[p] || 'p3-bar';
+    },
+
+    formatDate(str) {
+      if (!str) return '';
+      const d = new Date(str + 'T00:00:00');
+      const days = ['dom','seg','ter','qua','qui','sex','sáb'];
+      const months = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+      return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
+    },
+
+    formatDateFull(str) {
+      if (!str) return '';
+      const d = new Date(str + 'T00:00:00');
+      const days = ['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+      const months = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+      return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]}`;
+    },
+
+    formatDatetime(str) {
+      if (!str) return '';
+      return new Date(str).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    },
+
+    relativeTime(str) {
+      if (!str) return '';
+      const diff = Math.floor((new Date() - new Date(str)) / 60000);
+      if (diff < 1) return 'agora';
+      if (diff < 60) return `${diff}min`;
+      if (diff < 1440) return `${Math.floor(diff / 60)}h`;
+      return `${Math.floor(diff / 1440)}d`;
+    },
+
+    overdueDays(dateStr) {
+      if (!dateStr) return 0;
+      return Math.floor((new Date(this.todayStr + 'T00:00:00') - new Date(dateStr + 'T00:00:00')) / 86400000);
+    },
+
+    async sortByDeadline() {
+      // coleta todas as tasks do contexto atual (não-done, não-subtask)
+      const tasks = this.allTasks.filter(t => !t.parent_id && this.taskMatchesContext(t));
+      // ordena: com deadline primeiro (mais próximo), sem deadline depois
+      tasks.sort((a, b) => {
+        if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+        if (a.deadline) return -1;
+        if (b.deadline) return 1;
+        return 0;
+      });
+      await Promise.all(tasks.map((t, i) => {
+        const found = this.allTasks.find(x => x.id === t.id);
+        if (found) found.position = i;
+        return this.api(`/api/tasks/${t.id}`, 'PATCH', { position: i });
+      }));
+    },
+
+    blDragStart(ev, task, group) {
+      this._blDragItem = task;
+      this._blDragSourceGroup = group;
+      ev.dataTransfer.effectAllowed = 'move';
+    },
+
+    async blDrop(ev, target, targetGroup) {
+      if (!this._blDragItem || this._blDragItem.id === target.id) {
+        this._blDragOver = null;
+        return;
+      }
+      this._blDragOver = null;
+
+      const dragged = this._blDragItem;
+      const sourceGroup = this._blDragSourceGroup;
+      this._blDragItem = null;
+      this._blDragSourceGroup = null;
+
+      if (sourceGroup.slug === targetGroup.slug) {
+        // ── mesmo projeto: reordena ─────────────────────────────────────────
+        const tasks = [...targetGroup.tasks];
+        const fromIdx = tasks.findIndex(t => t.id === dragged.id);
+        const toIdx   = tasks.findIndex(t => t.id === target.id);
+        if (fromIdx === -1 || toIdx === -1) return;
+        tasks.splice(fromIdx, 1);
+        tasks.splice(toIdx, 0, dragged);
+        await Promise.all(tasks.map((t, i) => {
+          const f = this.allTasks.find(x => x.id === t.id);
+          if (f) f.position = i;
+          return this.api(`/api/tasks/${t.id}`, 'PATCH', { position: i });
+        }));
+      } else {
+        // ── entre projetos: muda project_slug + reordena os dois grupos ─────
+        const newSlug = targetGroup.slug === '__none__' ? null : targetGroup.slug;
+
+        // move reativamente em allTasks
+        const found = this.allTasks.find(x => x.id === dragged.id);
+        if (found) { found.project_slug = newSlug; found.position = 0; }
+
+        // novo grupo: insere antes do target
+        const targetTasks = [...targetGroup.tasks];
+        const toIdx = targetTasks.findIndex(t => t.id === target.id);
+        targetTasks.splice(toIdx === -1 ? targetTasks.length : toIdx, 0, dragged);
+
+        // grupo de origem: remove o arrastado
+        const sourceTasks = sourceGroup.tasks.filter(t => t.id !== dragged.id);
+
+        await Promise.all([
+          this.api(`/api/tasks/${dragged.id}`, 'PATCH', { project_slug: newSlug }),
+          ...targetTasks.map((t, i) => {
+            const f = this.allTasks.find(x => x.id === t.id);
+            if (f) f.position = i;
+            return this.api(`/api/tasks/${t.id}`, 'PATCH', { position: i });
+          }),
+          ...sourceTasks.map((t, i) => {
+            const f = this.allTasks.find(x => x.id === t.id);
+            if (f) f.position = i;
+            return this.api(`/api/tasks/${t.id}`, 'PATCH', { position: i });
+          }),
+        ]);
+      }
+    },
+
+    projDragStart(ev, group) {
+      this._projDragItem = group;
+      ev.dataTransfer.effectAllowed = 'move';
+    },
+
+    async projDrop(ev, target) {
+      if (!this._projDragItem || this._projDragItem.slug === target.slug) {
+        this._projDragOver = null; return;
+      }
+      this._projDragOver = null;
+      const dragged = this._projDragItem;
+      this._projDragItem = null;
+
+      const groups = [...this.dumpGroups];
+      const from = groups.findIndex(g => g.slug === dragged.slug);
+      const to   = groups.findIndex(g => g.slug === target.slug);
+      if (from === -1 || to === -1) return;
+      groups.splice(from, 1);
+      groups.splice(to, 0, dragged);
+
+      await Promise.all(groups.map((g, i) => {
+        const proj = this.projects.find(p => p.slug === g.slug);
+        if (proj) proj.position = i;
+        return g.slug === '__none__' ? Promise.resolve() : this.api(`/api/projects/${g.slug}`, 'PATCH', { position: i });
+      }));
+    },
+
+    daysDiff(dateStr) {
+      if (!dateStr) return 999;
+      return Math.floor((new Date(dateStr + 'T00:00:00') - new Date(this.todayStr + 'T00:00:00')) / 86400000);
+    },
+
+    updateTitle() {
+      const n = this.inbox.length;
+      document.title = n > 0 ? `(${n}) Pedro OS` : 'Pedro OS';
+    },
+
+    // ── toasts ────────────────────────────────────────────────────────────
+    showToast(message, undo = null) {
+      const id = Date.now();
+      this.toasts.push({ id, message, undo });
+      setTimeout(() => this.removeToast(id), 4000);
+    },
+    removeToast(id) { this.toasts = this.toasts.filter(t => t.id !== id); },
+
+    // ── keyboard ──────────────────────────────────────────────────────────
+    setupKeyboard() {
+      document.addEventListener('keydown', (e) => {
+        if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+        if (this.modal.show) { if (e.key === 'Escape') this.closeModal(); return; }
+        if (e.key.toLowerCase() === 'n') this.$nextTick(() => this.$refs.quickCapture?.focus());
+        if (e.key.toLowerCase() === 'h') this.setContext('hotmart');
+        if (e.key.toLowerCase() === 'p') this.setContext('personal');
+      });
+    },
+
+    // ── polling ───────────────────────────────────────────────────────────
+    startPolling() {
+      const poll = async () => {
+        try {
+          const tasks = await this.api('/api/tasks?reviewed=0');
+          if (tasks && tasks.length !== this.inbox.length) {
+            this.inbox = tasks;
+            this.updateTitle();
+          }
+        } catch {}
+
+        try {
+          const res = await fetch('http://localhost:3000/qr');
+          if (res.ok) {
+            const data = await res.json();
+            this.waConnected = data.connected;
+            this.qrDataUrl = data.qr || null;
+            if (data.connected) this.showQR = false;
+          }
+        } catch { this.waConnected = false; }
+
+        await this.loadMeetings();
+        await this.loadJira();
+        await this.loadPersonalCalendar();
+      };
+      poll();
+      setInterval(poll, 30000);
+      setInterval(() => {
+        this.currentTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      }, 1000);
+    },
+
+    async api(path, method = 'GET', body = null) {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (body) opts.body = JSON.stringify(body);
+      try {
+        const res = await fetch(`${API}${path}`, opts);
+        if (res.status === 204) return null;
+        if (!res.ok) {
+          let detail = `HTTP ${res.status}`;
+          try { const j = await res.json(); detail = j.detail || JSON.stringify(j); } catch {}
+          console.error(`[api] ${method} ${path} → ${detail}`);
+          return { _error: true, _status: res.status, _detail: detail };
+        }
+        return res.json();
+      } catch (e) { console.error(`[api] ${method} ${path} threw:`, e); return null; }
+    },
+  };
+}
+
+function inboxCard(task) {
+  return {
+    task,
+    draft: {
+      title: task.title,
+      project_slug: task.project_slug || '',
+      deadline: task.deadline || '',
+      priority: task.priority || 'p3',
+      description: task.description || '',
+    },
+    removing: false,
+    _timers: {},
+
+    getProjectContext(slug) { return this.$root.getProjectContext(slug); },
+
+    autosave(field, value) {
+      clearTimeout(this._timers[field]);
+      this._timers[field] = setTimeout(async () => {
+        await fetch(`${API}/api/tasks/${this.task.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [field]: value || null }),
+        });
+      }, 500);
+    },
+
+    async review() {
+      await fetch(`${API}/api/tasks/${this.task.id}/review`, { method: 'POST' });
+      this.removing = true;
+      setTimeout(async () => {
+        this.$root.inbox = this.$root.inbox.filter(t => t.id !== this.task.id);
+        this.$root.updateTitle();
+        await this.$root.loadToday();
+        await this.$root.loadAllTasks();
+      }, 300);
+    },
+
+    async snooze() {
+      await fetch(`${API}/api/tasks/${this.task.id}/snooze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days: 1 }),
+      });
+      this.removing = true;
+      setTimeout(async () => {
+        await this.$root.loadInbox();
+        this.$root.showToast('⏰ Volta amanhã no inbox');
+      }, 300);
+    },
+
+    discard() {
+      this.removing = true;
+      const id = this.task.id;
+      const short = this.task.short_id;
+      const snap = [...this.$root.inbox];
+      setTimeout(() => {
+        this.$root.inbox = this.$root.inbox.filter(t => t.id !== id);
+        this.$root.updateTitle();
+      }, 300);
+      this.$root.showToast(`🗑 #${short} descartada`, () => {
+        this.$root.inbox = snap;
+        this.$root.updateTitle();
+      });
+      fetch(`${API}/api/tasks/${id}`, { method: 'DELETE' });
+    },
+
+    async openFull() { await this.$root.openModal(this.task); },
+
+    openNewProjectFromCard() {
+      this.$root.newProjectModal = {
+        show: true, name: '', description: '', deadline: '',
+        color: this.$root.context === 'personal' ? '#22D3EE' : '#FF5A1F',
+        context: this.$root.context,
+        _callback: (slug) => {
+          this.draft.project_slug = slug;
+          this.autosave('project_slug', slug);
+        },
+      };
+    },
+  };
+}
+</script>
+</body>
+</html>
