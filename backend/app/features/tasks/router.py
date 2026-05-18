@@ -1,5 +1,5 @@
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
@@ -7,12 +7,13 @@ from app.features.tasks import service
 from app.features.tasks.schemas import (
     TaskCreate, TaskUpdate, TaskResponse, TaskDetailResponse,
     ChecklistItemCreate, ChecklistItemUpdate, ChecklistItemResponse,
-    TaskLinkCreate, TaskLinkResponse, SnoozeRequest,
+    TaskLinkCreate, TaskLinkResponse, SnoozeRequest, TaskImageResponse,
 )
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 checklist_router = APIRouter(prefix="/api/checklist", tags=["checklist"])
 links_router = APIRouter(prefix="/api/links", tags=["links"])
+images_router = APIRouter(prefix="/api/images", tags=["images"])
 
 
 @router.get("", response_model=List[TaskResponse])
@@ -123,3 +124,24 @@ async def delete_checklist_item(item_id: str, db: AsyncSession = Depends(get_db)
 async def delete_link(link_id: str, db: AsyncSession = Depends(get_db)):
     if not await service.delete_link(db, link_id):
         raise HTTPException(status_code=404, detail="Link não encontrado")
+
+
+# --- Images (prefix /api/tasks/{id}/images + /api/images) ---
+
+@router.post("/{task_id}/images", response_model=TaskImageResponse, status_code=201)
+async def upload_image(task_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    img = await service.upload_image(db, task_id, file)
+    if not img:
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+    return img
+
+
+@router.get("/{task_id}/images", response_model=List[TaskImageResponse])
+async def list_images(task_id: str, db: AsyncSession = Depends(get_db)):
+    return await service.list_images(db, task_id)
+
+
+@images_router.delete("/{image_id}", status_code=204)
+async def delete_image(image_id: str, db: AsyncSession = Depends(get_db)):
+    if not await service.delete_image(db, image_id):
+        raise HTTPException(status_code=404, detail="Imagem não encontrada")

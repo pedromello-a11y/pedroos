@@ -6,7 +6,7 @@ async def send_whatsapp(to: str, text: str) -> bool:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
-                settings.whatsapp_send_url,
+                f"{settings.wa_gateway_url}/send",
                 json={"to": to, "text": text},
             )
             return resp.status_code == 200

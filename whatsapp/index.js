@@ -15,6 +15,8 @@ dotenv.config();
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 const PORT = parseInt(process.env.PORT || "3000");
+const AUTH_DIR = process.env.AUTH_DIR || "auth_info_baileys";
+const QR_FILE = process.env.QR_FILE || "/data/qr.txt";
 
 let sock = null;
 let currentQR = null;
@@ -52,15 +54,10 @@ app.get("/logs", (_req, res) => {
   res.json(recentLogs);
 });
 
-app.get("/qr", async (_req, res) => {
+app.get("/qr", (_req, res) => {
   if (waConnected) return res.json({ connected: true, qr: null });
   if (!currentQR) return res.json({ connected: false, qr: null });
-  try {
-    const dataUrl = await QRCode.toDataURL(currentQR, { width: 256, margin: 2 });
-    res.json({ connected: false, qr: dataUrl });
-  } catch (err) {
-    res.status(500).json({ ok: false, reason: err.message });
-  }
+  res.json({ connected: false, qr: currentQR });
 });
 
 app.post("/reset", async (_req, res) => {
@@ -74,8 +71,8 @@ app.post("/reset", async (_req, res) => {
     currentQR = null;
     alfredGroupJID = process.env.ALFRED_GROUP_JID || null;
 
-    if (fs.existsSync("auth_info_baileys")) {
-      fs.rmSync("auth_info_baileys", { recursive: true, force: true });
+    if (fs.existsSync(AUTH_DIR)) {
+      fs.rmSync(AUTH_DIR, { recursive: true, force: true });
       console.log("🗑️  auth_info_baileys removido");
     }
 
@@ -122,7 +119,7 @@ async function discoverAlfredGroup(socket) {
 
 // ── Baileys connection ───────────────────────────────────────────────────────
 async function connect() {
-  const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
 
   const logger = {
@@ -132,7 +129,18 @@ async function connect() {
     child: () => logger,
   };
 
-  sock = makeWASocket({ version, auth: state, logger, printQRInTerminal: false });
+  sock = makeWASocket({
+    version,
+    auth: state,
+    logger,
+    printQRInTerminal: false,
+    syncFullHistory: false,
+    markOnlineOnConnect: false,
+    generateHighQualityLinkPreview: false,
+    getMessage: async () => undefined,
+    cachedGroupMetadata: async () => undefined,
+    transactionOpts: { maxCommitRetries: 1, delayBetweenTriesMs: 10 },
+  });
   sock.ev.on("creds.update", saveCreds);
 
   sock.ev.on("connection.update", async (update) => {
@@ -143,12 +151,14 @@ async function connect() {
       waConnected = false;
       console.log("\nEscaneia o QR code (ou veja no dashboard):\n");
       qrcodeTerminal.generate(qr, { small: true });
+      try { fs.writeFileSync(QR_FILE, qr); } catch {}
     }
 
     if (connection === "open") {
       currentQR = null;
       waConnected = true;
       console.log("✅ WhatsApp conectado!");
+      try { fs.unlinkSync(QR_FILE); } catch {}
       await discoverAlfredGroup(sock);
     }
 
@@ -214,5 +224,15 @@ async function connect() {
     }
   });
 }
+
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err.message);
+  // Crypto/noise errors from Baileys during reconnect — restart connection instead of crashing
+  setTimeout(() => connect().catch(console.error), 3000);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+});
 
 connect().catch(console.error);

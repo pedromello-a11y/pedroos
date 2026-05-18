@@ -25,8 +25,9 @@ SEED_PROJECTS = [
 async def lifespan(app: FastAPI):
     # register models
     from app.features.projects.models import Project
-    from app.features.tasks.models import Task, Checklist, TaskLink, WaProcessed  # noqa: F401
+    from app.features.tasks.models import Task, Checklist, TaskLink, TaskImage, WaProcessed  # noqa: F401
     from app.features.integrations.models import PendingCalendarEvent  # noqa: F401
+    from app.features.notes.models import Note  # noqa: F401
 
     os.makedirs("data", exist_ok=True)
 
@@ -53,6 +54,10 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("ALTER TABLE tasks ADD COLUMN status_note TEXT"))
         except Exception:
             pass
+        try:
+            await conn.execute(text("ALTER TABLE tasks ADD COLUMN remind_at TEXT"))
+        except Exception:
+            pass
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Project).limit(1))
@@ -64,6 +69,9 @@ async def lifespan(app: FastAPI):
                     color=color, position=pos, created_at=now,
                 ))
             await db.commit()
+
+    from app.scheduler import start_scheduler
+    start_scheduler()
 
     yield
 
@@ -78,18 +86,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.features.tasks.router import router as tasks_router, checklist_router, links_router
+from app.features.tasks.router import router as tasks_router, checklist_router, links_router, images_router
+from app.features.tasks.sse import router as sse_router
 from app.features.projects.router import router as projects_router
 from app.features.whatsapp.router import router as whatsapp_router
 from app.features.integrations.router import router as integrations_router
+from app.features.notes.router import router as notes_router
 
 app.include_router(tasks_router)
 app.include_router(checklist_router)
 app.include_router(links_router)
+app.include_router(images_router)
+app.include_router(sse_router)
 app.include_router(projects_router)
 app.include_router(whatsapp_router)
 app.include_router(integrations_router)
+app.include_router(notes_router)
 
+
+UPLOADS_DIR = os.environ.get("UPLOADS_DIR") or os.path.join(os.path.dirname(__file__), "..", "data", "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "frontend")
 if os.path.isdir(FRONTEND_DIR):
@@ -98,6 +115,54 @@ if os.path.isdir(FRONTEND_DIR):
     @app.get("/")
     async def serve_dashboard():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+
+@app.post("/api/scheduler/test-daily")
+async def test_daily():
+    from app.scheduler import _build_daily_summary
+    from app.features.whatsapp.sender import send_whatsapp
+    from app.config import settings
+    msg = await _build_daily_summary()
+    jid = settings.my_whatsapp_jid or settings.alfred_group_jid
+    if jid:
+        await send_whatsapp(jid, msg)
+    return JSONResponse({"ok": True, "preview": msg})
+
+
+@app.post("/api/scheduler/test-tomorrow")
+async def test_tomorrow():
+    from app.scheduler import _build_tomorrow_meetings
+    from app.features.whatsapp.sender import send_whatsapp
+    from app.config import settings
+    msg = await _build_tomorrow_meetings()
+    jid = settings.my_whatsapp_jid or settings.alfred_group_jid
+    if jid:
+        await send_whatsapp(jid, msg)
+    return JSONResponse({"ok": True, "preview": msg})
+
+
+@app.post("/api/scheduler/test-weekly")
+async def test_weekly():
+    from app.scheduler import _build_weekly_summary
+    from app.features.whatsapp.sender import send_whatsapp
+    from app.config import settings
+    msg = await _build_weekly_summary()
+    jid = settings.my_whatsapp_jid or settings.alfred_group_jid
+    if jid:
+        await send_whatsapp(jid, msg)
+    return JSONResponse({"ok": True, "preview": msg})
+
+
+@app.post("/api/scheduler/test-eod")
+async def test_eod():
+    from app.scheduler import _build_eod_summary
+    from app.features.whatsapp.sender import send_whatsapp
+    from app.config import settings
+    msg = await _build_eod_summary()
+    jid = settings.my_whatsapp_jid or settings.alfred_group_jid
+    if jid:
+        await send_whatsapp(jid, msg)
+    return JSONResponse({"ok": True, "preview": msg})
 
 
 @app.get("/api/health")

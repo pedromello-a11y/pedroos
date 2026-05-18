@@ -6,8 +6,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./data/pedro.db"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
-    whatsapp_send_url: str = "http://localhost:3000/send"
+    wa_gateway_url: str = "http://localhost:3000"
     my_whatsapp_jid: str = ""
+    alfred_group_jid: str = "120363426318370449@g.us"
     cors_origins: List[str] = [
         "http://localhost:5500",
         "http://127.0.0.1:5500",

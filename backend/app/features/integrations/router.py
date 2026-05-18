@@ -14,12 +14,14 @@ from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 import httpx
+from httpx import ConnectError, TimeoutException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.config import settings
 from app.db import get_db
+from app.features.tasks.models import Task
 from app.shared.dates import now_brt
 
 log = logging.getLogger(__name__)
@@ -162,6 +164,8 @@ async def _meetings_from_api(access_token: str, target_date: str | None = None):
                     "conferenceDataVersion": "1",
                 },
             )
+    except (ConnectError, TimeoutException):
+        return {"connected": False, "events": [], "error": "offline"}
     except Exception as e:
         log.warning("[google-cal] fetch error: %r", e)
         return {"connected": False, "events": [], "error": "fetch_failed"}
@@ -214,6 +218,8 @@ async def _meetings_from_ics(ics_url: str = "", target_date: str | None = None):
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             res = await client.get(ics_url)
+    except (ConnectError, TimeoutException):
+        return {"connected": False, "events": [], "error": "offline"}
     except Exception as e:
         log.warning("[calendar] fetch failed: %s", e)
         return {"connected": False, "events": [], "error": "fetch_failed"}
@@ -440,6 +446,8 @@ async def jira_active():
                     "User-Agent":     "PedroOS/1.0",
                 },
             )
+    except (ConnectError, TimeoutException):
+        return {"connected": False, "issues": [], "error": "offline"}
     except Exception as e:
         log.warning("[jira] request failed: %r", e)
         return {"connected": False, "issues": [], "error": f"request_failed: {type(e).__name__}: {repr(e)[:300]}"}
@@ -463,6 +471,73 @@ async def jira_active():
         })
 
     return {"connected": True, "issues": issues}
+
+
+@router.post("/jira/sync")
+async def jira_sync(db: AsyncSession = Depends(get_db)):
+    """Verifica no Jira se tarefas linkadas foram finalizadas e atualiza o status local."""
+    base  = settings.jira_base_url.rstrip("/")
+    email = settings.jira_email
+    token = settings.jira_api_token
+
+    if not (base and email and token):
+        return {"synced": [], "error": "jira_not_configured"}
+
+    result = await db.execute(
+        select(Task).where(
+            Task.jira_key.isnot(None),
+            Task.status != "done",
+        )
+    )
+    tasks = result.scalars().all()
+    if not tasks:
+        return {"synced": []}
+
+    keys = [t.jira_key for t in tasks]
+    jql = f"key in ({', '.join(keys)})"
+    auth = base64.b64encode(f"{email}:{token}".encode()).decode()
+
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True, http2=False) as client:
+            res = await client.post(
+                f"{base}/rest/api/3/search/jql",
+                json={"jql": jql, "fields": ["status"], "maxResults": 100},
+                headers={
+                    "Authorization": f"Basic {auth}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "User-Agent": "PedroOS/1.0",
+                },
+            )
+    except Exception as e:
+        log.warning("[jira/sync] request failed: %r", e)
+        return {"synced": [], "error": repr(e)}
+
+    if res.status_code != 200:
+        return {"synced": [], "error": f"http_{res.status_code}"}
+
+    done_keys = {
+        it["key"]
+        for it in res.json().get("issues", [])
+        if (it.get("fields", {}).get("status", {}).get("statusCategory", {}).get("key") == "done")
+    }
+
+    synced = []
+    now = now_brt().isoformat()
+    task_map = {t.jira_key: t for t in tasks}
+    for key in done_keys:
+        if key in task_map:
+            t = task_map[key]
+            t.status = "done"
+            t.completed_at = now
+            t.updated_at = now
+            synced.append({"id": t.id, "short_id": t.short_id, "title": t.title, "jira_key": key})
+
+    if synced:
+        await db.commit()
+        log.info("[jira/sync] %d tarefas finalizadas: %s", len(synced), [s["jira_key"] for s in synced])
+
+    return {"synced": synced}
 
 
 def _adf_to_text(node, depth=0) -> str:

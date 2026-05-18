@@ -28,6 +28,7 @@ class Task(Base):
     actual_hours = Column(Float, nullable=True)
     position = Column(Integer, nullable=True)
 
+    remind_at = Column(Text)
     source = Column(Text, default="dashboard")
     created_at = Column(Text, nullable=False)
     reviewed_at = Column(Text)
@@ -65,6 +66,20 @@ class TaskLink(Base):
     created_at = Column(Text, nullable=False)
 
     __table_args__ = (Index("idx_links_task", "task_id"),)
+
+
+class TaskImage(Base):
+    __tablename__ = "task_images"
+
+    id = Column(Text, primary_key=True)
+    task_id = Column(Text, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    filename = Column(Text, nullable=False)
+    original_name = Column(Text, nullable=False)
+    mime_type = Column(Text, nullable=False)
+    size = Column(Integer, nullable=False)
+    created_at = Column(Text, nullable=False)
+
+    __table_args__ = (Index("idx_images_task", "task_id"),)
 
 
 class WaProcessed(Base):

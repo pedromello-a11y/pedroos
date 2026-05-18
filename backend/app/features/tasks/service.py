@@ -1,9 +1,10 @@
+import os
 from typing import Optional
 from datetime import date, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 
-from app.features.tasks.models import Task, Checklist, TaskLink
+from app.features.tasks.models import Task, Checklist, TaskLink, TaskImage
 from app.features.tasks.schemas import (
     TaskCreate, TaskUpdate, SnoozeRequest,
     ChecklistItemCreate, ChecklistItemUpdate, TaskLinkCreate,
@@ -249,6 +250,55 @@ async def delete_link(db: AsyncSession, link_id: str) -> bool:
     if not link:
         return False
     await db.delete(link)
+    await db.commit()
+    return True
+
+
+_UPLOADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "data", "uploads")
+
+
+async def upload_image(db: AsyncSession, task_id: str, file) -> Optional[TaskImage]:
+    task = await get_task(db, task_id)
+    if not task:
+        return None
+    os.makedirs(_UPLOADS_DIR, exist_ok=True)
+    ext = os.path.splitext(file.filename or "")[1].lower() or ".jpg"
+    stored = make_id() + ext
+    content = await file.read()
+    with open(os.path.join(_UPLOADS_DIR, stored), "wb") as f:
+        f.write(content)
+    img = TaskImage(
+        id=make_id(),
+        task_id=task.id,
+        filename=stored,
+        original_name=file.filename or stored,
+        mime_type=file.content_type or "image/jpeg",
+        size=len(content),
+        created_at=now_brt().isoformat(),
+    )
+    db.add(img)
+    await db.commit()
+    await db.refresh(img)
+    return img
+
+
+async def list_images(db: AsyncSession, task_id: str) -> list:
+    result = await db.execute(
+        select(TaskImage).where(TaskImage.task_id == task_id).order_by(TaskImage.created_at)
+    )
+    return result.scalars().all()
+
+
+async def delete_image(db: AsyncSession, image_id: str) -> bool:
+    result = await db.execute(select(TaskImage).where(TaskImage.id == image_id))
+    img = result.scalar_one_or_none()
+    if not img:
+        return False
+    try:
+        os.remove(os.path.join(_UPLOADS_DIR, img.filename))
+    except FileNotFoundError:
+        pass
+    await db.delete(img)
     await db.commit()
     return True
 

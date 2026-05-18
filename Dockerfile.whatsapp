@@ -1,0 +1,20 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY whatsapp/package.json whatsapp/package-lock.json* ./
+RUN npm install --omit=dev
+
+COPY whatsapp/ .
+
+ENV NODE_OPTIONS="--max-old-space-size=120"
+ENV PORT="3000"
+ENV AUTH_DIR="/data/auth_info_baileys"
+ENV QR_FILE="/data/qr.txt"
+ENV BACKEND_URL="https://pedroos.fly.dev"
+
+RUN mkdir -p /data/auth_info_baileys
+
+EXPOSE 3000
+
+CMD ["node", "index.js"]

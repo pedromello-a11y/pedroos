@@ -1,0 +1,13 @@
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/node_modules
+**/auth_info_baileys
+**/.env
+**/data
+**/.git
+**/*.log
+**/venv
+**/.venv
+backend/tests/

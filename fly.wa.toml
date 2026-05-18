@@ -1,0 +1,16 @@
+app = "pedroos-wa"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile.whatsapp"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[mounts]]
+  source = "pedroos_wa_data"
+  destination = "/data"

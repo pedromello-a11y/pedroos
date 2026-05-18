@@ -169,9 +169,53 @@
     .deadline-overdue{ color: #ef4444; }
     .deadline-done   { color: #475569; }
     .bl-drag-over { opacity: 0.4; outline: 1px dashed var(--border2); border-radius: 6px; }
+    .bl-nest-over { outline: 2px solid #8B5CF6; border-radius: 6px; background: rgba(139,92,246,0.08) !important; }
+    .pulse-dot {
+      display: inline-block;
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: #10B981;
+      vertical-align: middle;
+      margin-right: 3px;
+      margin-bottom: 1px;
+    }
     .task-row-doing {
-      background: rgba(234,179,8,0.05) !important;
-      border-left: 3px solid rgba(234,179,8,0.65) !important;
+      background: rgba(16,185,129,0.05) !important;
+      border-left: 3px solid #10B981 !important;
+    }
+    .status-chip-doing {
+      color: #10B981;
+      border-color: #10B981;
+      background: rgba(16,185,129,0.15);
+      box-shadow: 0 0 8px rgba(16,185,129,0.30);
+    }
+    .task-row-todo {
+      background: rgba(245,158,11,0.04) !important;
+      border-left: 3px solid #F59E0B !important;
+    }
+    .status-chip-todo {
+      color: #F59E0B;
+      border-color: #F59E0B;
+      background: rgba(245,158,11,0.12);
+    }
+    .task-row-queued {
+      border-left: 2px solid #4B5563 !important;
+      opacity: 0.8;
+    }
+    .status-chip-queued {
+      color: #9CA3AF;
+      border-color: #4B5563;
+    }
+    .task-row-backlog {
+      opacity: 0.5;
+    }
+    .task-row-backlog:hover {
+      opacity: 0.75;
+    }
+    .status-chip-backlog {
+      color: #6B7280;
+      border-color: #374151;
+      border-style: dashed;
     }
     .task-row-hover-show { display: none; }
     .task-row:hover .task-row-hover-show { display: inline; }
@@ -185,6 +229,17 @@
     }
 
     .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .img-drop-zone {
+      border: 1px dashed var(--border2);
+      border-radius: 8px;
+      transition: border-color 0.15s, background 0.15s;
+      cursor: pointer;
+    }
+    .img-drop-zone:hover, .img-drop-zone.img-dragging {
+      border-color: rgba(255,90,31,0.6);
+      background: rgba(255,90,31,0.04);
+    }
 
     /* Layout */
     .layout {
@@ -302,10 +357,26 @@
       <!-- Compact mode -->
       <div x-show="!inboxExpanded" class="flex flex-col gap-1.5">
         <template x-for="task in inbox" :key="task.id">
-          <div @click="openModal(task)" class="task-row"
+          <div x-data="{ open: false }" @click="openModal(task)" class="task-row"
             :style="'border-left: 3px solid ' + (getProjectContext(task.project_slug) === 'personal' ? '#22D3EE' : '#FF5A1F')">
             <span class="text-sm flex-1 min-w-0 truncate" x-text="task.title || task.raw_input || '(sem título)'"></span>
-            <span class="text-xs text-slate-600 font-mono shrink-0" x-text="relativeTime(task.created_at)"></span>
+            <div class="relative shrink-0" @click.stop>
+              <span @click="open = !open"
+                class="status-chip cursor-pointer"
+                :class="task.status === 'raw' ? 'text-slate-600 border-slate-700' : statusChipClass(task.status)"
+                :style="task.status === 'raw' ? 'border-style:dashed' : ''"
+                x-text="task.status === 'raw' ? '— definir' : statusHtml(task.status)"></span>
+              <div x-show="open" @click.outside="open = false"
+                class="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-2xl overflow-hidden"
+                style="background:var(--card);border:1px solid var(--border2);min-width:110px">
+                <template x-for="s in [{v:'todo',l:'Aguardando'},{v:'doing',l:'Fazendo'},{v:'queued',l:'Na fila'},{v:'backlog',l:'Backlog'}]" :key="s.v">
+                  <button @click="setTaskStatus(task, s.v); reviewInboxTask(task); open = false"
+                    class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800">
+                    <span class="status-chip" :class="'status-chip-' + s.v" style="pointer-events:none;cursor:default;min-width:0" x-text="s.l"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
           </div>
         </template>
       </div>
@@ -337,7 +408,7 @@
                 type="text" class="w-full px-3 py-2" />
             </div>
 
-            <div class="grid grid-cols-3 gap-2 mb-3">
+            <div class="grid grid-cols-2 gap-2 mb-2">
               <div>
                 <label class="text-xs text-slate-500 mb-1 block font-semibold">Projeto</label>
                 <div class="flex gap-1">
@@ -353,6 +424,18 @@
                     style="background:var(--surface);border:1px solid var(--border)">+</button>
                 </div>
               </div>
+              <div>
+                <label class="text-xs text-slate-500 mb-1 block font-semibold">Status</label>
+                <select x-model="draft.status" @change="autosave('status', draft.status)"
+                  class="w-full px-2 py-1.5 text-xs">
+                  <option value="todo">Aguardando</option>
+                  <option value="doing">Fazendo</option>
+                  <option value="queued">Na fila</option>
+                  <option value="backlog">Backlog</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mb-3">
               <div>
                 <label class="text-xs text-slate-500 mb-1 block font-semibold">Prazo</label>
                 <input x-model="draft.deadline" @change="autosave('deadline', draft.deadline)"
@@ -389,12 +472,25 @@
       </div>
     </section>
 
+    <!-- VIEW TOGGLE: TAREFAS / NOTAS -->
+    <div class="flex items-center gap-1 mb-5">
+      <div class="flex items-center rounded-lg p-0.5" style="background:var(--bg);border:1px solid var(--border)">
+        <button @click="setView('tasks')"
+          :class="activeView === 'tasks' ? (context === 'personal' ? 'ctx-ps' : 'ctx-hm') : 'text-slate-500 hover:text-slate-300'"
+          class="text-xs font-bold px-4 py-1.5 rounded-md transition-all">📋 Tarefas</button>
+        <button @click="setView('notes')"
+          :class="activeView === 'notes' ? (context === 'personal' ? 'ctx-ps' : 'ctx-hm') : 'text-slate-500 hover:text-slate-300'"
+          class="text-xs font-bold px-4 py-1.5 rounded-md transition-all">📝 Notas</button>
+      </div>
+      <span x-show="activeView === 'tasks'" class="text-xs text-slate-600 font-mono" x-text="'· ' + totalDumpCount + ' tarefas'"></span>
+      <span x-show="activeView === 'notes'" class="text-xs text-slate-600 font-mono" x-text="'· ' + notes.length + ' notas'"></span>
+    </div>
+
     <!-- TASK DUMP -->
-    <section>
+    <section x-show="activeView === 'tasks'">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2">
           <span class="section-label">Todas as tarefas</span>
-          <span class="text-xs text-slate-600 font-mono" x-text="'· ' + totalDumpCount"></span>
         </div>
         <div class="flex items-center gap-3">
           <span class="badge" :class="context === 'personal' ? 'ctx-ps' : 'ctx-hm'"
@@ -416,67 +512,69 @@
         Nenhuma tarefa em <span x-text="context === 'personal' ? 'Pessoal' : 'Hotmart'"></span> ainda.
       </div>
 
-      <div class="flex flex-col gap-1.5">
-        <template x-for="task in flatTasks" :key="task.id">
+      <div class="flex flex-col gap-4">
+        <template x-for="group in groupedFlatTasks" :key="group.status">
           <div>
-            <div @click="openModal(task)" class="task-row"
-              :class="[task.status === 'doing' ? 'task-row-doing' : '', task.deadline && task.deadline < todayStr && task.status !== 'doing' ? 'overdue-row' : '', _blDragOver === task.id ? 'bl-drag-over' : '']"
+            <div class="flex items-center gap-2 mt-1 mb-2">
+              <span class="section-label" :class="statusGroupLabelClass(group.status)" x-text="statusGroupLabel(group.status)"></span>
+              <span class="text-xs font-mono text-slate-700 ml-1" x-text="'· ' + group.tasks.length"></span>
+              <div class="flex-1 h-px ml-2" style="background:var(--border)"></div>
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <template x-for="task in group.tasks" :key="task.id">
+          <div>
+            <div @click="openModal(task)" class="task-row group"
+              :class="[task.status === 'doing' ? 'task-row-doing' : task.status === 'todo' ? 'task-row-todo' : task.status === 'queued' ? 'task-row-queued' : task.status === 'backlog' ? 'task-row-backlog' : '', task.deadline && task.deadline < todayStr && task.status !== 'doing' ? 'overdue-row' : '', _blNestOver === task.id ? 'bl-nest-over' : (_blDragOver === task.id ? 'bl-drag-over' : '')]"
               :style="task.deadline && task.deadline < todayStr && task.status !== 'doing' ? 'border-left: 2px solid #EF4444' : ''"
               draggable="true"
-              @dragstart="blDragStart($event, task, taskGroup(task))"
-              @dragover.prevent="_blDragOver = task.id"
-              @dragleave="_blDragOver = null"
-              @drop.prevent="blDrop($event, task, taskGroup(task))"
-              @dragend="_blDragItem = null; _blDragSourceGroup = null; _blDragOver = null">
+              @dragstart="blDragStart($event, task, null)"
+              @dragover.prevent="blDragOverFlat($event, task)"
+              @dragleave="_blDragOver = null; _blNestOver = null"
+              @drop.prevent="blDropFlat($event, task)"
+              @dragend="_blDragItem = null; _blDragSourceGroup = null; _blDragOver = null; _blNestOver = null">
               <span class="text-slate-700 hover:text-slate-400 text-sm shrink-0 select-none mr-1"
                 style="cursor:grab" @click.stop>⠿</span>
               <span class="priority-bar" :class="priorityBarClass(task.priority)"></span>
-              <!-- project dot -->
-              <span class="shrink-0 w-1.5 h-1.5 rounded-full mr-1"
-                :style="'background:' + (projects.find(p => p.slug === task.project_slug)?.color || '#374151')"></span>
-              <span x-text="priorityEmoji(task.priority)" class="text-sm w-4 shrink-0"></span>
-              <!-- title + inline status note -->
-              <span class="text-sm min-w-0 truncate" :class="task.status_note ? 'shrink-0 max-w-[40%]' : 'flex-1'" x-text="task.title"></span>
-              <span x-show="task.status_note" @click.stop
-                x-data="{ editing: false, val: task.status_note || '' }"
-                class="flex-1 min-w-0 ml-2">
-                <span x-show="!editing" @click="editing = true; val = task.status_note || ''; $nextTick(() => $refs['sn_'+task.id]?.focus())"
-                  class="text-[11px] italic text-slate-600 hover:text-slate-400 transition-colors truncate block cursor-text"
-                  x-text="'· ' + task.status_note"></span>
-                <input x-show="editing" :x-ref="'sn_'+task.id"
-                  x-model="val"
-                  @blur="editing = false; task.status_note = val; api('/api/tasks/'+task.id, 'PATCH', {status_note: val || null})"
-                  @keydown.enter="editing = false; task.status_note = val; api('/api/tasks/'+task.id, 'PATCH', {status_note: val || null})"
-                  @keydown.escape="editing = false; val = task.status_note || ''"
-                  @click.stop
-                  class="text-[11px] italic text-slate-400 bg-transparent border-b border-slate-700 outline-none w-full px-0.5"
-                  placeholder="status..." />
+              <!-- project tag -->
+              <span style="width:72px;min-width:72px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center">
+                <span class="text-[9px] font-bold rounded"
+                  style="max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 6px"
+                  :style="task.project_slug && projects.find(p => p.slug === task.project_slug) ? projectTagStyle(task.project_slug) : 'visibility:hidden'"
+                  x-text="projects.find(p => p.slug === task.project_slug)?.name || ''"></span>
               </span>
-              <!-- add status note button when empty -->
-              <button x-show="!task.status_note" @click.stop
-                x-data="{ editing: false, val: '' }"
-                class="text-slate-700 hover:text-slate-500 text-[10px] shrink-0 transition-colors opacity-0 group-hover:opacity-100 ml-1"
-                style="font-size:10px"
-                @click="editing = true; $nextTick(() => $refs['snadd_'+task.id]?.focus())">
-                <input x-show="editing" :x-ref="'snadd_'+task.id"
-                  x-model="val"
-                  @blur="editing = false; if(val) { task.status_note = val; api('/api/tasks/'+task.id, 'PATCH', {status_note: val}); } val = ''"
-                  @keydown.enter="editing = false; if(val) { task.status_note = val; api('/api/tasks/'+task.id, 'PATCH', {status_note: val}); } val = ''"
-                  @keydown.escape="editing = false; val = ''"
-                  @click.stop
-                  class="text-[11px] italic text-slate-400 bg-transparent border-b border-slate-700 outline-none w-32 px-0.5"
-                  placeholder="+ status..." />
-                <span x-show="!editing" class="task-row-hover-show">+ status</span>
-              </button>
+              <!-- title + inline status note -->
+              <span class="text-sm min-w-0 truncate" :class="(task.status_note || _editingSN===task.id) ? 'shrink-0 max-w-[40%]' : 'flex-1'" x-text="task.title"></span>
+              <!-- status note: show/edit -->
+              <span class="flex-1 min-w-0 ml-2 min-w-0" @click.stop>
+                <template x-if="_editingSN !== task.id">
+                  <span x-show="task.status_note"
+                    @click="_editingSN = task.id; _editingSNVal = task.status_note || ''; $nextTick(() => $refs.snInput?.focus())"
+                    class="text-[11px] italic text-slate-600 hover:text-slate-400 transition-colors truncate block cursor-text"
+                    x-text="'· ' + task.status_note"></span>
+                </template>
+                <template x-if="_editingSN === task.id">
+                  <input x-ref="snInput"
+                    x-model="_editingSNVal"
+                    @blur="saveStatusNote(task)"
+                    @keydown.enter="saveStatusNote(task)"
+                    @keydown.escape="_editingSN = null"
+                    @click.stop
+                    class="text-[11px] italic text-slate-400 bg-transparent border-b border-slate-700 outline-none w-full px-0.5"
+                    placeholder="status..." />
+                </template>
+                <span x-show="!task.status_note && _editingSN !== task.id"
+                  @click="_editingSN = task.id; _editingSNVal = ''; $nextTick(() => $refs.snInput?.focus())"
+                  class="task-row-hover-show text-[10px] text-slate-700 hover:text-slate-500 cursor-pointer">+ status</span>
+              </span>
               <!-- colunas fixas -->
               <div class="flex items-center shrink-0" style="gap:8px">
                 <div style="width:80px" class="relative shrink-0" x-data="{ open: false }">
                   <span @click.stop="open = !open" class="status-chip w-full block text-center"
-                    :class="statusChipClass(task.status)" x-text="statusLabel(task.status)"></span>
+                    :class="statusChipClass(task.status)" x-html="statusHtml(task.status)"></span>
                   <div x-show="open" @click.outside="open = false"
                     class="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-2xl overflow-hidden"
                     style="background:var(--card);border:1px solid var(--border2);min-width:90px">
-                    <template x-for="s in ['todo','doing','blocked','done']" :key="s">
+                    <template x-for="s in ['todo','doing','queued','backlog','done']" :key="s">
                       <button @click.stop="setTaskStatus(task, s); open = false"
                         class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
                         :class="task.status === s ? 'bg-slate-800/60' : ''">
@@ -508,28 +606,81 @@
             </div>
             <!-- subtasks -->
             <template x-if="subtasksByParent[task.id]?.length">
-              <div class="flex flex-col gap-1 mt-1 ml-6">
+              <div class="flex flex-col gap-1 mt-1">
                 <template x-for="sub in subtasksByParent[task.id]" :key="sub.id">
                   <div @click="openModal(sub)" class="task-row"
-                    :class="sub.status === 'doing' ? 'task-row-doing' : ''"
-                    :style="sub.status === 'doing' ? '' : 'border-left:2px solid var(--border2)'">
-                    <span class="flex-1 text-sm min-w-0 truncate text-slate-300" x-text="sub.title"></span>
+                    :class="[sub.status === 'doing' ? 'task-row-doing' : sub.status === 'todo' ? 'task-row-todo' : sub.status === 'queued' ? 'task-row-queued' : sub.status === 'backlog' ? 'task-row-backlog' : '', _blDragOver === sub.id ? 'bl-drag-over' : '']"
+                    :style="['doing','todo','queued'].includes(sub.status) ? '' : 'border-left:2px solid var(--border2)'"
+                    draggable="true"
+                    @dragstart="blDragStart($event, sub, null)"
+                    @dragover.prevent="_blDragOver = sub.id; _blNestOver = null"
+                    @dragleave="_blDragOver = null"
+                    @drop.prevent="blDropFlat($event, sub)"
+                    @dragend="_blDragItem = null; _blDragSourceGroup = null; _blDragOver = null; _blNestOver = null">
+                    <span class="text-slate-700 hover:text-slate-400 text-sm shrink-0 select-none mr-1" style="cursor:grab" @click.stop>⠿</span>
+                    <span style="width:3px;min-width:3px;flex-shrink:0;visibility:hidden"></span>
+                    <span style="width:72px;min-width:72px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;padding-right:6px">
+                      <span style="color:#334155;font-size:13px;line-height:1">↳</span>
+                    </span>
+                    <span class="min-w-0 truncate shrink-0" style="font-size:13px;color:#64748b" :class="(sub.status_note || _editingSN===sub.id) ? 'max-w-[38%]' : 'flex-1'" x-text="sub.title"></span>
+                    <!-- status note subtask -->
+                    <span class="flex-1 min-w-0 ml-1" @click.stop>
+                      <template x-if="_editingSN !== sub.id">
+                        <span x-show="sub.status_note"
+                          @click="_editingSN = sub.id; _editingSNVal = sub.status_note || ''; $nextTick(() => $refs.snInput?.focus())"
+                          class="text-[11px] italic text-slate-600 hover:text-slate-400 transition-colors truncate block cursor-text"
+                          x-text="'· ' + sub.status_note"></span>
+                      </template>
+                      <template x-if="_editingSN === sub.id">
+                        <input x-ref="snInput"
+                          x-model="_editingSNVal"
+                          @blur="saveStatusNote(sub)"
+                          @keydown.enter="saveStatusNote(sub)"
+                          @keydown.escape="_editingSN = null"
+                          @click.stop
+                          class="text-[11px] italic text-slate-400 bg-transparent border-b border-slate-700 outline-none w-full px-0.5"
+                          placeholder="status..." />
+                      </template>
+                      <span x-show="!sub.status_note && _editingSN !== sub.id"
+                        @click="_editingSN = sub.id; _editingSNVal = ''; $nextTick(() => $refs.snInput?.focus())"
+                        class="task-row-hover-show text-[10px] text-slate-700 hover:text-slate-500 cursor-pointer">+ status</span>
+                    </span>
                     <div class="flex items-center shrink-0" style="gap:8px">
-                      <div style="width:80px" class="relative shrink-0" x-data="{ open: false }">
-                        <span @click.stop="open = !open" class="status-chip"
-                          :class="statusChipClass(sub.status)" x-text="statusLabel(sub.status)"></span>
-                        <div x-show="open" @click.outside="open = false"
-                          class="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-2xl overflow-hidden"
-                          style="background:var(--card);border:1px solid var(--border2);min-width:90px">
-                          <template x-for="s in ['todo','doing','blocked','done']" :key="s">
-                            <button @click.stop="setTaskStatus(sub, s); open = false"
+                      <div style="width:80px" class="relative shrink-0">
+                        <span @click.stop="_openSubStatus = _openSubStatus === sub.id ? null : sub.id"
+                          class="status-chip w-full block text-center"
+                          :class="statusChipClass(sub.status)" x-html="statusHtml(sub.status)"></span>
+                        <template x-if="_openSubStatus === sub.id">
+                          <div @click.outside="$nextTick(() => _openSubStatus = null)"
+                            class="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-2xl overflow-hidden"
+                            style="background:var(--card);border:1px solid var(--border2);min-width:90px">
+                            <button @click.stop="setTaskStatus(sub, 'todo'); _openSubStatus = null"
                               class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
-                              :class="sub.status === s ? 'bg-slate-800/60' : ''">
-                              <span class="status-chip" :class="statusChipClass(s)" x-text="statusLabel(s)"
-                                style="pointer-events:none;cursor:default;min-width:0"></span>
+                              :class="sub.status === 'todo' ? 'bg-slate-800/60' : ''">
+                              <span class="status-chip status-chip-todo" style="pointer-events:none;cursor:default;min-width:0">Aguardando</span>
                             </button>
-                          </template>
-                        </div>
+                            <button @click.stop="setTaskStatus(sub, 'doing'); _openSubStatus = null"
+                              class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
+                              :class="sub.status === 'doing' ? 'bg-slate-800/60' : ''">
+                              <span class="status-chip status-chip-doing" style="pointer-events:none;cursor:default;min-width:0">Fazendo</span>
+                            </button>
+                            <button @click.stop="setTaskStatus(sub, 'queued'); _openSubStatus = null"
+                              class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
+                              :class="sub.status === 'queued' ? 'bg-slate-800/60' : ''">
+                              <span class="status-chip status-chip-queued" style="pointer-events:none;cursor:default;min-width:0">Na fila</span>
+                            </button>
+                            <button @click.stop="setTaskStatus(sub, 'backlog'); _openSubStatus = null"
+                              class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
+                              :class="sub.status === 'backlog' ? 'bg-slate-800/60' : ''">
+                              <span class="status-chip status-chip-backlog" style="pointer-events:none;cursor:default;min-width:0">Backlog</span>
+                            </button>
+                            <button @click.stop="setTaskStatus(sub, 'done'); _openSubStatus = null"
+                              class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
+                              :class="sub.status === 'done' ? 'bg-slate-800/60' : ''">
+                              <span class="status-chip text-emerald-400 border-emerald-900" style="pointer-events:none;cursor:default;min-width:0">Feita</span>
+                            </button>
+                          </div>
+                        </template>
                       </div>
                       <div style="width:64px" class="shrink-0 overflow-hidden">
                         <a x-show="sub.jira_key" :href="'https://hotmart.atlassian.net/browse/' + sub.jira_key"
@@ -553,6 +704,9 @@
                 </template>
               </div>
             </template>
+          </div>
+              </template>
+            </div>
           </div>
         </template>
       </div>
@@ -580,6 +734,86 @@
       </div>
 
     </section>
+
+    <!-- ═════ NOTAS ═════════════════════════════════════════════════════════ -->
+    <section x-show="activeView === 'notes'" x-cloak>
+
+      <!-- Toolbar -->
+      <div class="flex items-center gap-2 mb-4 flex-wrap">
+        <!-- Search -->
+        <input x-model="notesQ" @input.debounce.400ms="loadNotes()"
+          type="text" placeholder="Buscar notas…"
+          class="flex-1 px-3 py-1.5 text-sm" style="min-width:160px" />
+        <!-- Project filter -->
+        <select x-model="notesProject" @change="loadNotes()"
+          class="px-2 py-1.5 text-xs" style="min-width:120px">
+          <option value="">Todos projetos</option>
+          <option value="inbox">📥 Inbox</option>
+          <template x-for="p in projects" :key="p.slug">
+            <option :value="p.slug" x-text="p.name"></option>
+          </template>
+        </select>
+        <!-- Tag filter -->
+        <select x-model="notesTag" @change="loadNotes()"
+          class="px-2 py-1.5 text-xs">
+          <option value="">Todas tags</option>
+          <option value="ideia">💡 Ideia</option>
+          <option value="decisão">⚡ Decisão</option>
+          <option value="referência">📎 Referência</option>
+          <option value="reunião">🗓 Reunião</option>
+        </select>
+        <!-- New note -->
+        <button @click="createNoteQuick()"
+          class="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+          style="background:var(--accent-10);border:1px solid var(--accent-20);color:var(--accent)">
+          + nota
+        </button>
+        <button @click="loadNotes()" class="text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors">↻</button>
+      </div>
+
+      <!-- Empty state -->
+      <div x-show="notes.length === 0" class="text-center py-16 text-slate-600 text-sm">
+        Nenhuma nota ainda. Digite algo e clique <strong>+ nota</strong>.<br>
+        <span class="text-xs text-slate-700 mt-1 block">No WhatsApp: <code class="font-mono">dump: texto</code> ou <code class="font-mono">dump ideia: texto</code></span>
+      </div>
+
+      <!-- Notes grouped -->
+      <div class="flex flex-col gap-6">
+        <template x-for="group in notesGrouped" :key="group.key">
+          <div>
+            <div class="flex items-center gap-2 mb-2">
+              <span class="w-2 h-2 rounded-full shrink-0"
+                :style="group.color ? 'background:' + group.color : 'background:#374151'"></span>
+              <span class="section-label" x-text="group.label"></span>
+              <span class="text-xs text-slate-700 font-mono" x-text="'· ' + group.notes.length"></span>
+            </div>
+            <div class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr))">
+              <template x-for="note in group.notes" :key="note.id">
+                <div @click="openNoteModal(note)" class="card p-3 cursor-pointer relative"
+                  :class="note.pinned ? 'ring-1 ring-inset' : ''"
+                  :style="note.pinned ? 'ring-color: var(--accent-20)' : ''">
+                  <!-- pin indicator -->
+                  <span x-show="note.pinned" class="absolute top-2 right-2 text-xs ac" title="Fixada">📌</span>
+                  <!-- tag badge -->
+                  <div x-show="note.tag" class="mb-1">
+                    <span class="badge text-slate-500 border-slate-700" style="border-width:1px;border-style:solid;font-size:9px"
+                      x-text="{ideia:'💡 ideia',decisão:'⚡ decisão',referência:'📎 ref',reunião:'🗓 reunião'}[note.tag] || note.tag"></span>
+                  </div>
+                  <p class="text-sm font-semibold text-slate-200 mb-1 leading-snug truncate"
+                    x-text="note.title || '(sem título)'"></p>
+                  <p x-show="note.content && note.content !== note.title"
+                    class="text-xs text-slate-500 leading-relaxed line-clamp-3"
+                    x-text="note.content"></p>
+                  <p class="text-[10px] text-slate-700 font-mono mt-2" x-text="relativeTime(note.created_at)"></p>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+
+    </section>
+
   </main>
 
   <!-- ═════ SIDEBAR: HOJE ═════════════════════════════════════════════════ -->
@@ -840,21 +1074,18 @@
         class="flex items-center gap-2 mb-2 w-full text-left group">
         <span class="section-label transition-colors group-hover:text-slate-400">🟦 Jira</span>
         <span x-show="unlinkedJira.length > 0"
-          class="text-[10px] font-bold text-yellow-400 font-mono"
-          x-text="unlinkedJira.length + ' a capturar'"></span>
+          class="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-full"
+          style="background:rgba(234,179,8,0.15);color:#ca8a04"
+          x-text="unlinkedJira.length"></span>
         <span x-show="unlinkedJira.length === 0 && jira.length > 0"
           class="text-[10px] text-emerald-500 font-mono">✓ tudo capturado</span>
         <span class="ml-auto text-slate-600 text-xs transition-transform"
           :style="jiraExpanded ? 'transform:rotate(180deg)' : ''">▾</span>
       </button>
 
-      <div x-show="jiraExpanded">
-        <div x-show="unlinkedJira.length === 0" class="text-xs text-slate-600 italic px-1 mb-1.5">
-          <span x-show="!jiraConnected">Jira não conectado</span>
-          <span x-show="jiraConnected && unlinkedJira.length === 0">Todas capturadas ✓</span>
-        </div>
-
-        <!-- Apenas não capturadas em andamento -->
+      <!-- Tarefas a capturar: sempre visíveis, sem depender de jiraExpanded -->
+      <div x-show="unlinkedJira.length > 0">
+        <!-- Em andamento não capturadas -->
         <div class="flex flex-col gap-1.5" x-show="unlinkedJira.some(i => !isPending(i.status))">
           <template x-for="issue in unlinkedJira.filter(i => !isPending(i.status))" :key="issue.key">
             <a :href="issue.url" target="_blank" class="sb-row">
@@ -866,7 +1097,7 @@
           </template>
         </div>
 
-        <!-- Pendente não capturado -->
+        <!-- Pendentes não capturadas -->
         <div x-show="unlinkedJira.some(i => isPending(i.status))" class="mt-2">
           <p class="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">Pendente</p>
           <div class="flex flex-col gap-1.5">
@@ -882,9 +1113,27 @@
           </div>
         </div>
       </div>
+
+      <!-- Seção colapsável: quando tudo capturado ou Jira desconectado -->
+      <div x-show="jiraExpanded && unlinkedJira.length === 0">
+        <div class="text-xs text-slate-600 italic px-1 mb-1.5">
+          <span x-show="!jiraConnected">Jira não conectado</span>
+          <span x-show="jiraConnected">Todas capturadas ✓</span>
+        </div>
+      </div>
     </div>
 
   </aside>
+</div>
+
+<!-- ── LIGHTBOX ──────────────────────────────────────────────────────────── -->
+<div x-show="lightboxImg" x-cloak @click="lightboxImg = null"
+  class="fixed inset-0 z-50 flex items-center justify-center"
+  style="background:rgba(0,0,0,0.88);cursor:zoom-out">
+  <img :src="lightboxImg" @click.stop
+    class="rounded-lg shadow-2xl" style="max-width:90vw;max-height:90vh;object-fit:contain;cursor:default" />
+  <button @click="lightboxImg = null"
+    class="absolute top-4 right-4 text-white/60 hover:text-white text-2xl leading-none">×</button>
 </div>
 
 <!-- ── TASK MODAL ─────────────────────────────────────────────────────────── -->
@@ -930,9 +1179,10 @@
           </select>
           <select x-model="modal.task.status" @change="modalAutosave('status', modal.task.status)"
             class="px-2 py-1.5 text-xs">
-            <option value="todo">⚪ A fazer</option>
-            <option value="doing">🟡 Fazendo</option>
-            <option value="blocked">🔴 Bloqueada</option>
+            <option value="todo">🟡 Aguardando</option>
+            <option value="doing">🟠 Fazendo</option>
+            <option value="queued">⚪ Na fila</option>
+            <option value="backlog">⬜ Backlog</option>
             <option value="done">✅ Feita</option>
           </select>
         </div>
@@ -952,6 +1202,42 @@
               type="number" min="0" step="0.5" placeholder="0"
               class="w-full px-3 py-1.5 text-xs" />
           </div>
+        </div>
+
+        <div class="mb-4" x-data="{ customMode: false }">
+          <p class="text-xs font-bold text-slate-500 mb-2">Lembrete</p>
+
+          <!-- Reminder set: show pill + clear -->
+          <template x-if="modal.task.remind_at">
+            <div class="flex items-center gap-2">
+              <span class="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full text-amber-300"
+                style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.25)">
+                ⏰ <span x-text="formatRemindAt(modal.task.remind_at)"></span>
+              </span>
+              <button @click="setRemindAt(null); customMode=false"
+                class="text-xs text-slate-600 hover:text-red-400 transition-colors">✕</button>
+            </div>
+          </template>
+
+          <!-- No reminder: show presets -->
+          <template x-if="!modal.task.remind_at">
+            <div>
+              <div x-show="!customMode" class="flex flex-wrap gap-1.5">
+                <button @click="setRemindAt('now+15')" class="text-xs px-2.5 py-1 rounded-full text-slate-300 hover:text-white transition-colors" style="border:1px solid var(--border2)">15min</button>
+                <button @click="setRemindAt('now+60')" class="text-xs px-2.5 py-1 rounded-full text-slate-300 hover:text-white transition-colors" style="border:1px solid var(--border2)">1h</button>
+                <button @click="setRemindAt('today+18:00')" class="text-xs px-2.5 py-1 rounded-full text-slate-300 hover:text-white transition-colors" style="border:1px solid var(--border2)">Hoje 18h</button>
+                <button @click="setRemindAt('tomorrow+09:00')" class="text-xs px-2.5 py-1 rounded-full text-slate-300 hover:text-white transition-colors" style="border:1px solid var(--border2)">Amanhã 9h</button>
+                <button @click="setRemindAt('tomorrow+14:00')" class="text-xs px-2.5 py-1 rounded-full text-slate-300 hover:text-white transition-colors" style="border:1px solid var(--border2)">Amanhã 14h</button>
+                <button @click="customMode=true" class="text-xs px-2.5 py-1 rounded-full text-slate-500 hover:text-slate-300 transition-colors" style="border:1px solid var(--border2)">+ outra hora</button>
+              </div>
+              <div x-show="customMode" class="flex items-center gap-2">
+                <input type="datetime-local" id="remind_custom"
+                  @change="setRemindAt('custom:' + $event.target.value); customMode=false"
+                  class="text-xs px-2 py-1 rounded" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text1)" />
+                <button @click="customMode=false" class="text-xs text-slate-600 hover:text-slate-400">✕</button>
+              </div>
+            </div>
+          </template>
         </div>
 
         <div class="mb-4">
@@ -1017,6 +1303,34 @@
           </div>
           <button x-show="!modal.addingLink" @click="modal.addingLink = true"
             class="text-xs text-slate-600 hover:text-slate-400 transition-colors">+ link</button>
+        </div>
+
+        <!-- Imagens -->
+        <div class="mb-4">
+          <p class="text-xs font-bold text-slate-500 mb-2">Imagens</p>
+          <div x-show="modal.images.length > 0" class="grid grid-cols-4 gap-2 mb-2">
+            <template x-for="img in modal.images" :key="img.id">
+              <div class="relative group rounded-lg overflow-hidden" style="aspect-ratio:1;background:var(--surface)">
+                <img :src="'/uploads/' + img.filename" :alt="img.original_name"
+                  class="w-full h-full object-cover cursor-zoom-in"
+                  @click="lightboxImg = '/uploads/' + img.filename" />
+                <button @click.stop="deleteImage(img)"
+                  class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity
+                         text-white text-xs font-bold leading-none rounded-full w-5 h-5 flex items-center justify-center"
+                  style="background:rgba(0,0,0,0.7)">×</button>
+              </div>
+            </template>
+          </div>
+          <div class="img-drop-zone py-3 px-4 text-center"
+            :class="_imgDragging ? 'img-dragging' : ''"
+            @dragover.prevent="_imgDragging = true"
+            @dragleave="_imgDragging = false"
+            @drop.prevent="handleImageDrop($event)"
+            @click="$refs.imgInput.click()">
+            <span class="text-xs text-slate-600">Arraste imagens aqui ou clique para selecionar</span>
+            <input x-ref="imgInput" type="file" accept="image/*" multiple class="hidden"
+              @change="handleImageSelect($event)" />
+          </div>
         </div>
 
         <div class="mb-4">
@@ -1198,6 +1512,102 @@
   </div>
 </div>
 
+<!-- ── NOTE MODAL ─────────────────────────────────────────────────────────── -->
+<div x-show="noteModal.show" x-cloak
+  class="fixed inset-0 z-50 flex items-center justify-center px-4"
+  style="background:rgba(0,0,0,0.75);backdrop-filter:blur(4px)"
+  @click.self="closeNoteModal()"
+  @keydown.escape.window="closeNoteModal()">
+  <template x-if="noteModal.note">
+  <div class="card w-full max-w-xl p-6 shadow-2xl slide-up flex flex-col gap-4">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="font-mono text-xs text-slate-600" x-text="noteModal.note ? '#' + noteModal.note.short_id : ''"></span>
+        <span class="badge text-slate-600" style="border:1px solid var(--border);font-size:9px"
+          x-text="noteModal.note?.source === 'whatsapp' ? '📱 WhatsApp' : '🖥 Dashboard'"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button @click="toggleNotePin(noteModal.note)"
+          class="text-sm transition-colors"
+          :class="noteModal.note?.pinned ? 'ac' : 'text-slate-600 hover:text-slate-400'"
+          title="Fixar nota">📌</button>
+        <button @click="closeNoteModal()"
+          class="text-slate-500 hover:text-slate-200 transition-colors text-xl leading-none">×</button>
+      </div>
+    </div>
+
+    <!-- Title -->
+    <div>
+      <label class="text-xs text-slate-500 mb-1 block font-semibold">Título</label>
+      <input x-model="noteModal.note.title"
+        @input="noteAutosave('title', noteModal.note.title)"
+        type="text" class="w-full px-3 py-2 text-sm" placeholder="Título da nota…" />
+    </div>
+
+    <!-- Content -->
+    <div>
+      <label class="text-xs text-slate-500 mb-1 block font-semibold">Conteúdo</label>
+      <textarea x-model="noteModal.note.content"
+        @input="noteAutosave('content', noteModal.note.content)"
+        rows="7" class="w-full px-3 py-2 text-sm leading-relaxed"
+        placeholder="Escreva aqui…"></textarea>
+    </div>
+
+    <!-- Project + Tag -->
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="text-xs text-slate-500 mb-1 block font-semibold">Projeto</label>
+        <select x-model="noteModal.note.project_slug"
+          @change="noteAutosave('project_slug', noteModal.note.project_slug)"
+          class="w-full px-2 py-1.5 text-xs">
+          <option value="">📥 Inbox</option>
+          <template x-for="p in projects" :key="p.slug">
+            <option :value="p.slug" x-text="p.name"></option>
+          </template>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 mb-1 block font-semibold">Tag</label>
+        <select x-model="noteModal.note.tag"
+          @change="noteAutosave('tag', noteModal.note.tag)"
+          class="w-full px-2 py-1.5 text-xs">
+          <option value="">— sem tag</option>
+          <option value="ideia">💡 Ideia</option>
+          <option value="decisão">⚡ Decisão</option>
+          <option value="referência">📎 Referência</option>
+          <option value="reunião">🗓 Reunião</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center justify-between pt-2" style="border-top:1px solid var(--border)">
+      <button @click="deleteNoteModal()"
+        class="text-xs text-red-500 hover:text-red-400 transition-colors"
+        style="border:1px solid rgba(239,68,68,0.2);padding:5px 12px;border-radius:6px">
+        🗑 Excluir
+      </button>
+      <div class="flex gap-2">
+        <button @click="noteToTask()"
+          class="text-xs text-slate-400 hover:text-white transition-colors"
+          style="border:1px solid var(--border2);padding:5px 12px;border-radius:6px"
+          title="Cria uma tarefa com o título e conteúdo desta nota">
+          → criar tarefa
+        </button>
+        <button @click="closeNoteModal()"
+          class="text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
+          style="border:1px solid rgba(52,211,153,0.2);padding:5px 14px;border-radius:6px">
+          ✓ Fechar
+        </button>
+      </div>
+    </div>
+
+  </div>
+  </template>
+</div>
+
 <!-- ── NEW PROJECT MODAL ───────────────────────────────────────────────────── -->
 <div x-show="newProjectModal.show" x-cloak
   class="fixed inset-0 z-50 flex items-center justify-center px-4"
@@ -1237,7 +1647,10 @@
 
 <!-- ── ALPINE ──────────────────────────────────────────────────────────────── -->
 <script>
-const API = 'http://localhost:8000';
+const { hostname, port } = window.location;
+const API = (hostname === 'localhost' || hostname === '127.0.0.1')
+  ? `http://${hostname}:8000`
+  : window.location.origin;
 
 const CONTEXT_COLORS = {
   hotmart:  { accent: '#FF5A1F', a10: 'rgba(255,90,31,0.10)',  a20: 'rgba(255,90,31,0.22)'  },
@@ -1265,11 +1678,13 @@ function pedroOS() {
 
     // modal state
     modal: {
-      show: false, task: null, checklist: [], links: [], subtasks: [], focusMode: false,
+      show: false, task: null, checklist: [], links: [], subtasks: [], images: [], focusMode: false,
       newChecklistText: '', newLinkUrl: '', newLinkLabel: '',
       newSubtaskTitle: '', addingLink: false, addingSubtask: false,
       dragItem: null, dragOverItem: null,
     },
+    _imgDragging: false,
+    lightboxImg: null,
     newProjectModal: {
       show: false, name: '', description: '', deadline: '',
       color: '#FF5A1F', context: 'hotmart', _callback: null,
@@ -1280,6 +1695,8 @@ function pedroOS() {
     jiraExpanded: false,
     calOffset: 0,
     _sortMode: 'default',
+    _editingSN: null,
+    _editingSNVal: '',
     _calSig: '', _jiraSig: '',
     jiraBaseUrl: 'https://hotmart.atlassian.net',
     showQR: false, qrDataUrl: null,
@@ -1290,6 +1707,8 @@ function pedroOS() {
     _blDragItem: null,
     _blDragSourceGroup: null,
     _blDragOver: null,
+    _blNestOver: null,
+    _openSubStatus: null,
     _projDragItem: null,
     _projDragOver: null,
     doneTasks: [],
@@ -1297,12 +1716,114 @@ function pedroOS() {
     currentTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     _modalDebounce: {},
 
+    // notes state
+    activeView: localStorage.getItem('pedro_view') || 'tasks',
+    notes: [],
+    notesQ: '',
+    notesProject: null,
+    notesTag: null,
+    noteModal: { show: false, note: null },
+    _noteDebounce: {},
+
     // ── init ──────────────────────────────────────────────────────────────
     async init() {
       this.applyContextColors();
       await this.loadAll();
       this.setupKeyboard();
       this.startPolling();
+      this.connectSSE();
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    },
+
+    _notifiedMeetings: new Set(),
+    _notifiedReminders: new Set(),
+
+    _checkMeetingNotifications() {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const now = new Date();
+      const allEvents = [...(this.meetings || []), ...(this.personalEvents || [])];
+      for (const ev of allEvents) {
+        if (!ev.start_time) continue;
+        const today = now.toISOString().slice(0, 10);
+        const evDate = ev.date || today;
+        const evStart = new Date(`${evDate}T${ev.start_time}`);
+        const diffMin = (evStart - now) / 60000;
+        const key = `${evDate}-${ev.start_time}-${ev.title}`;
+        if (diffMin > 0 && diffMin <= 10 && !this._notifiedMeetings.has(key)) {
+          this._notifiedMeetings.add(key);
+          new Notification(`📅 Em ${Math.round(diffMin)}min: ${ev.title}`, {
+            body: `${ev.start_time}–${ev.end_time || ''} ${ev.location || ''}`.trim(),
+            icon: '/static/favicon.ico',
+          });
+        }
+      }
+    },
+
+    setRemindAt(spec) {
+      if (!spec) {
+        this.modal.task.remind_at = null;
+        this.modalAutosave('remind_at', null);
+        return;
+      }
+      const pad = n => String(n).padStart(2, '0');
+      const toISO = d => {
+        const off = -d.getTimezoneOffset();
+        const sign = off >= 0 ? '+' : '-';
+        const oh = pad(Math.floor(Math.abs(off) / 60)), om = pad(Math.abs(off) % 60);
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00${sign}${oh}:${om}`;
+      };
+      let d = new Date();
+      if (spec.startsWith('now+')) {
+        d.setMinutes(d.getMinutes() + parseInt(spec.slice(4)));
+      } else if (spec.startsWith('today+')) {
+        const [h, m] = spec.slice(6).split(':').map(Number);
+        d.setHours(h, m, 0, 0);
+        if (d <= new Date()) d.setDate(d.getDate() + 1);
+      } else if (spec.startsWith('tomorrow+')) {
+        const [h, m] = spec.slice(9).split(':').map(Number);
+        d.setDate(d.getDate() + 1);
+        d.setHours(h, m, 0, 0);
+      } else if (spec.startsWith('custom:')) {
+        d = new Date(spec.slice(7));
+      }
+      const iso = toISO(d);
+      this.modal.task.remind_at = iso;
+      this.modalAutosave('remind_at', iso);
+    },
+
+    formatRemindAt(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      const now = new Date();
+      const diffMin = Math.round((d - now) / 60000);
+      const pad = n => String(n).padStart(2, '0');
+      const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const todayDate = now.toDateString();
+      const tomorrowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString();
+      if (diffMin > 0 && diffMin < 60) return `Em ${diffMin}min`;
+      if (d.toDateString() === todayDate) return `Hoje às ${time}`;
+      if (d.toDateString() === tomorrowDate) return `Amanhã às ${time}`;
+      return `${pad(d.getDate())}/${pad(d.getMonth()+1)} às ${time}`;
+    },
+
+    _checkTaskReminders() {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const now = new Date();
+      const allTasks = [...(this.allTasks || []), ...(this.tasks || [])];
+      for (const t of allTasks) {
+        if (!t.remind_at || t.status === 'done') continue;
+        const remindDate = new Date(t.remind_at);
+        const diffMin = (remindDate - now) / 60000;
+        if (diffMin <= 0 && diffMin >= -2 && !this._notifiedReminders.has(t.id)) {
+          this._notifiedReminders.add(t.id);
+          new Notification(`⏰ Lembrete: ${t.title}`, {
+            body: t.deadline ? `Prazo: ${t.deadline}` : '',
+            icon: '/static/favicon.ico',
+          });
+        }
+      }
     },
 
     async loadAll() {
@@ -1315,6 +1836,7 @@ function pedroOS() {
         this.loadJira(),
         this.loadPersonalCalendar(),
         this.loadPendingEvents(),
+        this.loadNotes(),
       ]);
       this.updateTitle();
     },
@@ -1438,7 +1960,7 @@ function pedroOS() {
 
     async resetWA() {
       try {
-        await fetch('http://localhost:3000/reset', { method: 'POST' });
+        await fetch('/api/whatsapp/reset', { method: 'POST' });
         this.waConnected = false;
         this.qrDataUrl = null;
         this.showQR = true;
@@ -1473,7 +1995,21 @@ function pedroOS() {
           return a.key.localeCompare(b.key);
         });
         this.jira = issues;
+        await this.syncJiraStatus();
       }
+    },
+
+    async syncJiraStatus() {
+      const res = await this.api('/api/jira/sync', { method: 'POST' });
+      if (!res || !res.synced?.length) return;
+      res.synced.forEach(t => {
+        for (const list of [this.tasks, this.todayTasks, this.allTasks]) {
+          const found = list.find(i => i.id === t.id);
+          if (found) found.status = 'done';
+        }
+      });
+      this.showToast(`✅ ${res.synced.length} tarefa(s) finalizada(s) via Jira`);
+      await Promise.all([this.loadAllTasks(), this.loadToday()]);
     },
 
     openProject(group) {
@@ -1551,12 +2087,14 @@ function pedroOS() {
           return (prio[a.priority] ?? 2) - (prio[b.priority] ?? 2);
         });
       }
-      // default: doing first → position → priority → deadline
+      // default: position → doing → priority → deadline
+      // position é manual (drag-drop), então prevalece sobre tudo
+      // doing-first só como tiebreaker quando nenhum tem position definida
       return [...tasks].sort((a, b) => {
-        const doingA = a.status === 'doing' ? 0 : 1, doingB = b.status === 'doing' ? 0 : 1;
-        if (doingA !== doingB) return doingA - doingB;
         const posA = a.position ?? 99999, posB = b.position ?? 99999;
         if (posA !== posB) return posA - posB;
+        const doingA = a.status === 'doing' ? 0 : 1, doingB = b.status === 'doing' ? 0 : 1;
+        if (doingA !== doingB) return doingA - doingB;
         const pa = prio[a.priority] ?? 2, pb = prio[b.priority] ?? 2;
         if (pa !== pb) return pa - pb;
         if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
@@ -1596,15 +2134,41 @@ function pedroOS() {
 
     statusChipClass(status) {
       return {
-        todo:    'text-slate-500 border-slate-700',
-        doing:   'text-yellow-400 border-yellow-800',
-        blocked: 'text-red-400 border-red-900',
-        done:    'text-emerald-400 border-emerald-900',
-      }[status] || 'text-slate-500 border-slate-700';
+        raw:     'text-slate-600 border-slate-700',
+        todo:    'status-chip-todo',
+        doing:   'status-chip-doing',
+        queued:  'status-chip-queued',
+        backlog: 'status-chip-backlog',
+        done:    'text-emerald-500 border-emerald-900',
+      }[status] || 'status-chip-backlog';
     },
 
     statusLabel(status) {
-      return { todo: 'Aguardando', doing: 'Fazendo', blocked: 'Bloqueada', done: 'Feita' }[status] || status;
+      return { raw: '— definir', todo: 'Aguardando', doing: 'Fazendo', queued: 'Na fila', backlog: 'Backlog', done: 'Feita' }[status] || status;
+    },
+
+    statusHtml(status) {
+      const labels = { raw: '— definir', todo: 'Aguardando', doing: 'Fazendo', queued: 'Na fila', backlog: 'Backlog', done: 'Feita' };
+      return labels[status] || status;
+    },
+
+    statusGroupLabel(status) {
+      return { doing: 'Fazendo', todo: 'Aguardando', queued: 'Na fila', backlog: 'Backlog' }[status] || status;
+    },
+
+    statusGroupLabelClass(status) {
+      return { doing: 'text-emerald-700', todo: 'text-amber-700', queued: 'text-slate-600', backlog: 'text-slate-700' }[status] || 'text-slate-600';
+    },
+
+    get groupedFlatTasks() {
+      const order = ['doing', 'todo', 'queued', 'backlog'];
+      const tasks = this.flatTasks.filter(t => t.status !== 'done');
+      const groups = {};
+      for (const t of tasks) {
+        if (!groups[t.status]) groups[t.status] = [];
+        groups[t.status].push(t);
+      }
+      return order.filter(s => groups[s]?.length).map(s => ({ status: s, tasks: groups[s] }));
     },
 
     isPending(status) { return /pending/i.test(status); },
@@ -1616,6 +2180,13 @@ function pedroOS() {
         this.removeTaskFromView(task.id);
         this.showToast(`✅ Feita`);
       }
+    },
+
+    async reviewInboxTask(task) {
+      await this.api(`/api/tasks/${task.id}/review`, 'POST');
+      this.inbox = this.inbox.filter(t => t.id !== task.id);
+      this.updateTitle();
+      await this.loadAllTasks();
     },
 
     dragStart(event, item) {
@@ -1697,15 +2268,14 @@ function pedroOS() {
     async createQuickTask() {
       if (!this.quickTitle.trim()) return;
       const defaultProject = DEFAULT_PROJECT_BY_CONTEXT[this.context];
-      const payload = { title: this.quickTitle.trim(), project_slug: defaultProject, reviewed: 1 };
+      const payload = { title: this.quickTitle.trim(), project_slug: defaultProject, reviewed: 0, status: 'raw' };
       if (this._pendingJiraKey) payload.jira_key = this._pendingJiraKey;
       await this.api('/api/tasks', 'POST', payload);
       this.quickTitle = '';
       this._pendingJiraKey = null;
       const label = this.context === 'personal' ? 'Pessoal' : 'Hotmart';
       this.showToast(`✅ Tarefa criada em ${label}`);
-      this.loadAllTasks();
-      this.loadToday();
+      this.loadInbox();
     },
 
     async quickDone(task) {
@@ -1735,6 +2305,7 @@ function pedroOS() {
       this.modal.checklist = detail.checklist || [];
       this.modal.links = detail.links || [];
       this.modal.subtasks = detail.subtasks || [];
+      this.modal.images = await this.api(`/api/tasks/${task.id}/images`) || [];
       this.modal.newChecklistText = '';
       this.modal.newLinkUrl = '';
       this.modal.newLinkLabel = '';
@@ -1815,6 +2386,34 @@ function pedroOS() {
       this.modal.links = this.modal.links.filter(l => l.id !== link.id);
     },
 
+    async uploadImage(file) {
+      if (!this.modal.task?.id) return;
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`/api/tasks/${this.modal.task.id}/images`, { method: 'POST', body: form });
+      if (res.ok) {
+        const img = await res.json();
+        this.modal.images.push(img);
+      }
+    },
+
+    async deleteImage(img) {
+      await this.api(`/api/images/${img.id}`, 'DELETE');
+      this.modal.images = this.modal.images.filter(i => i.id !== img.id);
+    },
+
+    handleImageDrop(e) {
+      this._imgDragging = false;
+      const files = [...(e.dataTransfer.files || [])].filter(f => f.type.startsWith('image/'));
+      files.forEach(f => this.uploadImage(f));
+    },
+
+    handleImageSelect(e) {
+      const files = [...(e.target.files || [])].filter(f => f.type.startsWith('image/'));
+      files.forEach(f => this.uploadImage(f));
+      e.target.value = '';
+    },
+
     async addSubtask() {
       if (!this.modal.newSubtaskTitle.trim()) return;
       const sub = await this.api('/api/tasks', 'POST', {
@@ -1872,6 +2471,15 @@ function pedroOS() {
       return { p1: 'p1-bar', p2: 'p2-bar', p3: 'p3-bar', backlog: 'pb-bar' }[p] || 'p3-bar';
     },
 
+    projectTagStyle(slug) {
+      const p = this.projects.find(p => p.slug === slug);
+      const c = p?.color || '#374151';
+      const r = parseInt(c.slice(1,3),16), g = parseInt(c.slice(3,5),16), b = parseInt(c.slice(5,7),16);
+      const lum = (r*299 + g*587 + b*114) / 1000;
+      const text = lum < 140 ? '#e2e8f0' : c;
+      return `background:${c}22; color:${text}; border:1px solid ${c}55`;
+    },
+
     formatDate(str) {
       if (!str) return '';
       const d = new Date(str + 'T00:00:00');
@@ -1924,10 +2532,75 @@ function pedroOS() {
       }));
     },
 
+    saveStatusNote(task) {
+      const val = this._editingSNVal.trim();
+      task.status_note = val || null;
+      this.api(`/api/tasks/${task.id}`, 'PATCH', { status_note: val || null });
+      this._editingSN = null;
+    },
+
     blDragStart(ev, task, group) {
       this._blDragItem = task;
       this._blDragSourceGroup = group;
       ev.dataTransfer.effectAllowed = 'move';
+    },
+
+    blDragOverFlat(ev, task) {
+      if (!this._blDragItem || this._blDragItem.id === task.id) return;
+      const dragged = this._blDragItem;
+      // não pode aninhar se o dragged já tem filhos, ou se target já é subtask
+      const draggedHasChildren = (this.subtasksByParent[dragged.id] || []).length > 0;
+      const rect = ev.currentTarget.getBoundingClientRect();
+      const relX = ev.clientX - rect.left;
+      // nest só ativa se arrastar até a metade direita da row E target não tem pai
+      const isNestZone = relX > rect.width * 0.55 && !task.parent_id && !draggedHasChildren;
+      if (isNestZone) {
+        this._blNestOver = task.id;
+        this._blDragOver = null;
+      } else {
+        this._blDragOver = task.id;
+        this._blNestOver = null;
+      }
+    },
+
+    async blDropFlat(ev, target) {
+      if (!this._blDragItem || this._blDragItem.id === target.id) {
+        this._blDragOver = null; this._blNestOver = null; return;
+      }
+      const isNest = this._blNestOver === target.id;
+      this._blDragOver = null;
+      this._blNestOver = null;
+      const dragged = this._blDragItem;
+      this._blDragItem = null;
+      this._blDragSourceGroup = null;
+
+      if (isNest) {
+        const found = this.allTasks.find(x => x.id === dragged.id);
+        if (found) found.parent_id = target.id;
+        await this.api(`/api/tasks/${dragged.id}`, 'PATCH', { parent_id: target.id });
+        return;
+      }
+
+      // subtask solta em modo reorder → vira task avulsa
+      if (dragged.parent_id) {
+        const found = this.allTasks.find(x => x.id === dragged.id);
+        if (found) found.parent_id = null;
+        await this.api(`/api/tasks/${dragged.id}`, 'PATCH', { parent_id: null });
+        return;
+      }
+
+      const list = [...this.flatTasks];
+      const from = list.findIndex(t => t.id === dragged.id);
+      const to   = list.findIndex(t => t.id === target.id);
+      if (from === -1 || to === -1) return;
+      list.splice(from, 1);
+      list.splice(to, 0, dragged);
+
+      await Promise.all(list.map((t, i) => {
+        const f = this.allTasks.find(x => x.id === t.id);
+        if (f) f.position = i;
+        return this.api(`/api/tasks/${t.id}`, 'PATCH', { position: i });
+      }));
     },
 
     async blDrop(ev, target, targetGroup) {
@@ -2043,6 +2716,13 @@ function pedroOS() {
       });
     },
 
+    // ── SSE ───────────────────────────────────────────────────────────────
+    connectSSE() {
+      const es = new EventSource(`${API}/api/sse/inbox`);
+      es.addEventListener('inbox', () => { this.loadInbox(); });
+      es.onerror = () => { es.close(); setTimeout(() => this.connectSSE(), 8000); };
+    },
+
     // ── polling ───────────────────────────────────────────────────────────
     startPolling() {
       const poll = async () => {
@@ -2055,11 +2735,11 @@ function pedroOS() {
         } catch {}
 
         try {
-          const res = await fetch('http://localhost:3000/qr');
+          const res = await fetch('/api/whatsapp/status');
           if (res.ok) {
             const data = await res.json();
             this.waConnected = data.connected;
-            this.qrDataUrl = data.qr || null;
+            this.qrDataUrl = data.qr ? `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(data.qr)}` : null;
             if (data.connected) this.showQR = false;
           }
         } catch { this.waConnected = false; }
@@ -2067,6 +2747,8 @@ function pedroOS() {
         await this.loadMeetings();
         await this.loadJira();
         await this.loadPersonalCalendar();
+        this._checkMeetingNotifications();
+        this._checkTaskReminders();
       };
       poll();
       setInterval(poll, 30000);
@@ -2090,6 +2772,108 @@ function pedroOS() {
         return res.json();
       } catch (e) { console.error(`[api] ${method} ${path} threw:`, e); return null; }
     },
+
+    // ── notes ─────────────────────────────────────────────────────────────
+    setView(v) {
+      this.activeView = v;
+      localStorage.setItem('pedro_view', v);
+      if (v === 'notes') this.loadNotes();
+    },
+
+    async loadNotes() {
+      const params = new URLSearchParams();
+      if (this.notesProject) params.set('project_slug', this.notesProject);
+      if (this.notesTag)     params.set('tag', this.notesTag);
+      if (this.notesQ)       params.set('q', this.notesQ);
+      const qs = params.toString() ? '?' + params.toString() : '';
+      const res = await this.api(`/api/notes${qs}`);
+      this.notes = res || [];
+    },
+
+    get filteredNotes() {
+      return this.notes;
+    },
+
+    get notesGrouped() {
+      const groups = {};
+      for (const n of this.notes) {
+        const key = n.project_slug || '__inbox__';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(n);
+      }
+      // sort: inbox first, then by project position
+      const result = [];
+      if (groups['__inbox__']) result.push({ key: '__inbox__', label: '📥 Inbox', notes: groups['__inbox__'] });
+      for (const proj of this.projects) {
+        if (groups[proj.slug]) result.push({ key: proj.slug, label: proj.name, color: proj.color, notes: groups[proj.slug] });
+      }
+      return result;
+    },
+
+    async createNoteQuick() {
+      if (!this.notesQ.trim()) return;
+      const note = await this.api('/api/notes', 'POST', {
+        title: this.notesQ.trim(),
+        content: this.notesQ.trim(),
+        project_slug: this.notesProject || null,
+        tag: this.notesTag || null,
+        source: 'dashboard',
+      });
+      if (note && !note._error) {
+        this.notesQ = '';
+        this.notes.unshift(note);
+        this.openNoteModal(note);
+      }
+    },
+
+    openNoteModal(note) {
+      this.noteModal = { show: true, note: { ...note } };
+    },
+
+    closeNoteModal() {
+      this.noteModal = { show: false, note: null };
+    },
+
+    noteAutosave(field, value) {
+      clearTimeout(this._noteDebounce[field]);
+      this._noteDebounce[field] = setTimeout(async () => {
+        if (!this.noteModal.note) return;
+        const res = await this.api(`/api/notes/${this.noteModal.note.id}`, 'PATCH', { [field]: value || null });
+        if (res && !res._error) {
+          const idx = this.notes.findIndex(n => n.id === this.noteModal.note.id);
+          if (idx !== -1) this.notes[idx] = { ...this.notes[idx], [field]: value };
+        }
+      }, 600);
+    },
+
+    async toggleNotePin(note) {
+      const newVal = note.pinned ? 0 : 1;
+      const res = await this.api(`/api/notes/${note.id}`, 'PATCH', { pinned: newVal });
+      if (res && !res._error) {
+        note.pinned = newVal;
+        if (this.noteModal.note?.id === note.id) this.noteModal.note.pinned = newVal;
+        this.loadNotes();
+      }
+    },
+
+    async deleteNoteModal() {
+      const id = this.noteModal.note?.id;
+      if (!id) return;
+      this.closeNoteModal();
+      await this.api(`/api/notes/${id}`, 'DELETE');
+      this.notes = this.notes.filter(n => n.id !== id);
+      this.showToast('🗑 Nota excluída');
+    },
+
+    async noteToTask() {
+      const id = this.noteModal.note?.id;
+      if (!id) return;
+      const task = await this.api(`/api/notes/${id}/to-task`, 'POST', {});
+      if (task && !task._error) {
+        this.showToast(`✅ Tarefa criada: #${task.short_id}`);
+        await this.loadAllTasks();
+      }
+    },
   };
 }
 
@@ -2101,6 +2885,7 @@ function inboxCard(task) {
       project_slug: task.project_slug || '',
       deadline: task.deadline || '',
       priority: task.priority || 'p3',
+      status: (task.status && task.status !== 'raw') ? task.status : 'todo',
       description: task.description || '',
     },
     removing: false,
@@ -2120,7 +2905,13 @@ function inboxCard(task) {
     },
 
     async review() {
-      await fetch(`${API}/api/tasks/${this.task.id}/review`, { method: 'POST' });
+      await fetch(`${API}/api/tasks/${this.task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: this.draft.status }),
+      });
+      const res = await fetch(`${API}/api/tasks/${this.task.id}/review`, { method: 'POST' });
+      if (!res.ok) return;
       this.removing = true;
       setTimeout(async () => {
         this.$root.inbox = this.$root.inbox.filter(t => t.id !== this.task.id);
@@ -2131,11 +2922,12 @@ function inboxCard(task) {
     },
 
     async snooze() {
-      await fetch(`${API}/api/tasks/${this.task.id}/snooze`, {
+      const res = await fetch(`${API}/api/tasks/${this.task.id}/snooze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ days: 1 }),
       });
+      if (!res.ok) return;
       this.removing = true;
       setTimeout(async () => {
         await this.$root.loadInbox();

@@ -9,7 +9,7 @@ class TaskCreate(BaseModel):
     project_slug: Optional[str] = None
     deadline: Optional[str] = None
     priority: Literal["p1", "p2", "p3", "backlog"] = "p3"
-    status: Literal["todo", "doing", "blocked", "done"] = "todo"
+    status: Literal["raw", "todo", "doing", "queued", "backlog", "done"] = "raw"
     reviewed: int = 1
     source: Literal["whatsapp", "dashboard", "jira"] = "dashboard"
     parent_id: Optional[str] = None
@@ -22,7 +22,7 @@ class TaskUpdate(BaseModel):
     project_slug: Optional[str] = None
     deadline: Optional[str] = None
     priority: Optional[Literal["p1", "p2", "p3", "backlog"]] = None
-    status: Optional[Literal["todo", "doing", "blocked", "done"]] = None
+    status: Optional[Literal["raw", "todo", "doing", "queued", "backlog", "done"]] = None
     reviewed: Optional[int] = None
     snoozed_until: Optional[str] = None
     parent_id: Optional[str] = None
@@ -31,8 +31,9 @@ class TaskUpdate(BaseModel):
     estimated_hours: Optional[float] = None
     actual_hours: Optional[float] = None
     position: Optional[int] = None
+    remind_at: Optional[str] = None
 
-    @field_validator("deadline", "snoozed_until", mode="before")
+    @field_validator("deadline", "snoozed_until", "remind_at", mode="before")
     @classmethod
     def empty_str_to_none(cls, v):
         return None if v == "" else v
@@ -96,11 +97,24 @@ class TaskResponse(BaseModel):
     estimated_hours: Optional[float] = None
     actual_hours: Optional[float] = None
     position: Optional[int] = None
+    remind_at: Optional[str] = None
     source: str
     created_at: str
     reviewed_at: Optional[str] = None
     completed_at: Optional[str] = None
     updated_at: str
+
+    model_config = {"from_attributes": True}
+
+
+class TaskImageResponse(BaseModel):
+    id: str
+    task_id: str
+    filename: str
+    original_name: str
+    mime_type: str
+    size: int
+    created_at: str
 
     model_config = {"from_attributes": True}
 
