@@ -38,7 +38,7 @@ app.post("/send", async (req, res) => {
   if (!to || !text) return res.status(400).json({ ok: false, reason: "missing to or text" });
   if (!sock) return res.status(503).json({ ok: false, reason: "not connected" });
   try {
-    await sock.sendMessage(to, { text });
+    await sock.sendMessage(to, { text, linkPreview: false });
     res.json({ ok: true });
   } catch (err) {
     console.error("[send] error:", err.message);
