@@ -370,6 +370,19 @@ async def _run_scheduler():
                     sent.add(key_weekly)
                     logger.info("[scheduler] revisão semanal enviada")
 
+            # Calcular score do dia — 23:55
+            key_score = f"score_{today}"
+            if h == 23 and m == 55 and key_score not in sent:
+                try:
+                    from app.features.habits.service import calculate_day_score
+                    from app.db import AsyncSessionLocal as _ScoreSession
+                    async with _ScoreSession() as score_db:
+                        await calculate_day_score(score_db)
+                    sent.add(key_score)
+                    logger.info("[scheduler] day score calculado")
+                except Exception as e:
+                    logger.error(f"[scheduler] erro ao calcular score: {e}")
+
             # Lembretes de tarefas — verifica a cada ciclo (30s)
             await _check_task_reminders(send_whatsapp, target_jid)
 

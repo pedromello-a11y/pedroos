@@ -27,6 +27,7 @@ class Task(Base):
     estimated_hours = Column(Float, nullable=True)
     actual_hours = Column(Float, nullable=True)
     position = Column(Integer, nullable=True)
+    effort = Column(Integer, default=1)  # 1=baixo, 2=médio, 3=alto
 
     remind_at = Column(Text)
     source = Column(Text, default="dashboard")

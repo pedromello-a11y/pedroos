@@ -542,6 +542,15 @@
                   :style="task.project_slug && projects.find(p => p.slug === task.project_slug) ? projectTagStyle(task.project_slug) : 'visibility:hidden'"
                   x-text="projects.find(p => p.slug === task.project_slug)?.name || ''"></span>
               </span>
+              <!-- effort badge (pessoal) -->
+              <span x-show="context === 'personal' && task.effort"
+                class="text-[10px] shrink-0"
+                :class="{
+                  'text-emerald-500': task.effort === 1,
+                  'text-yellow-500': task.effort === 2,
+                  'text-red-500': task.effort === 3,
+                }"
+                x-text="task.effort === 1 ? '🟢' : task.effort === 2 ? '🟡' : '🔴'"></span>
               <!-- title + inline status note -->
               <span class="text-sm min-w-0 truncate" :class="(task.status_note || _editingSN===task.id) ? 'shrink-0 max-w-[40%]' : 'flex-1'" x-text="task.title"></span>
               <!-- status note: show/edit -->
@@ -1030,6 +1039,89 @@
       </div>
     </div>
 
+    <!-- MOMENTUM (só no contexto pessoal) -->
+    <div x-show="context === 'personal'" class="pb-4" style="border-bottom:1px solid var(--border)">
+      <!-- Streak + Points -->
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🔥</span>
+          <div>
+            <p class="text-xl font-bold text-white leading-none" x-text="momentum.streak"></p>
+            <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">streak</p>
+          </div>
+        </div>
+        <div class="text-right">
+          <p class="text-lg font-bold font-mono" :class="momentum.total_points >= 0 ? 'text-emerald-400' : 'text-red-400'"
+            x-text="(momentum.total_points >= 0 ? '+' : '') + momentum.total_points"></p>
+          <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">pontos</p>
+        </div>
+      </div>
+      <!-- Today progress -->
+      <div class="mb-3">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs text-slate-400">Hoje</span>
+          <span class="text-xs font-bold" :class="{
+            'text-emerald-400': momentum.grade === 'good',
+            'text-yellow-400': momentum.grade === 'neutral',
+            'text-red-400': momentum.grade === 'bad'
+          }" x-text="momentum.completion_pct + '%'"></span>
+        </div>
+        <div class="h-2 rounded-full overflow-hidden" style="background:var(--border)">
+          <div class="h-full rounded-full transition-all duration-500"
+            :class="{
+              'bg-emerald-500': momentum.grade === 'good',
+              'bg-yellow-500': momentum.grade === 'neutral',
+              'bg-red-500': momentum.grade === 'bad'
+            }"
+            :style="'width:' + momentum.completion_pct + '%'"></div>
+        </div>
+        <div class="flex items-center justify-between mt-1">
+          <span class="text-[10px] text-slate-600" x-text="momentum.tasks_done + '/' + momentum.tasks_proposed + ' tarefas'"></span>
+          <span class="text-xs font-mono" :class="momentum.today_points >= 0 ? 'text-emerald-400' : 'text-red-400'"
+            x-text="(momentum.today_points >= 0 ? '+' : '') + momentum.today_points + ' pts'"></span>
+        </div>
+      </div>
+      <!-- Week view -->
+      <div class="flex gap-1 justify-between mb-3">
+        <template x-for="day in momentum.week" :key="day.shared_date || day.date">
+          <div class="flex flex-col items-center gap-0.5">
+            <span class="text-[9px] text-slate-600 font-bold uppercase" x-text="day.day"></span>
+            <span class="w-6 h-6 rounded flex items-center justify-center text-xs"
+              :class="{
+                'bg-emerald-500/20 text-emerald-400': day.grade === 'good',
+                'bg-yellow-500/20 text-yellow-400': day.grade === 'neutral',
+                'bg-red-500/20 text-red-400': day.grade === 'bad',
+                'bg-slate-800 text-slate-700': !day.grade
+              }"
+              x-text="gradeEmoji(day.grade)"></span>
+          </div>
+        </template>
+      </div>
+      <!-- Habits -->
+      <div class="flex items-center justify-between mb-2">
+        <span class="section-label">🏋️ Hábitos</span>
+        <button @click="showHabitModal = true" class="text-[10px] text-slate-600 hover:text-slate-300 transition-colors">+ novo</button>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <template x-for="habit in momentum.habits" :key="habit.habit_id">
+          <div class="flex items-center gap-2 group">
+            <button @click="toggleHabit(habit)"
+              class="w-5 h-5 rounded flex items-center justify-center text-xs transition-all shrink-0"
+              :class="habit.done ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'border border-slate-700 text-slate-600 hover:border-slate-500'"
+              x-text="habit.done ? '✓' : ''"></button>
+            <span class="flex-1 text-sm" :class="habit.done ? 'text-slate-500 line-through' : 'text-slate-300'"
+              x-text="habit.name"></span>
+            <span class="text-[10px] font-mono shrink-0"
+              :class="habit.done ? 'text-emerald-400' : 'text-slate-700'"
+              x-text="habit.done ? '+' + habit.points_done : ''"></span>
+          </div>
+        </template>
+        <div x-show="momentum.habits.length === 0" class="text-xs text-slate-700 italic">
+          Nenhum hábito pra hoje
+        </div>
+      </div>
+    </div>
+
     <!-- OVERDUE -->
     <div x-show="filteredOverdue.length > 0">
       <div class="flex items-center gap-2 mb-2">
@@ -1123,6 +1215,42 @@
       </div>
     </div>
 
+    <!-- SHOPPING LIST (só no contexto pessoal) -->
+    <div x-show="context === 'personal'">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span class="section-label">🛒 Compras</span>
+          <span x-show="shopping.length > 0" class="text-[10px] font-bold font-mono text-cyan-400" x-text="shopping.length"></span>
+        </div>
+        <button x-show="shopping.some(i => i.done)" @click="clearDoneShopping()"
+          class="text-[10px] text-slate-600 hover:text-red-400 transition-colors">limpar ✓</button>
+      </div>
+      <div class="flex flex-col gap-1">
+        <template x-for="item in shopping" :key="item.id">
+          <div class="flex items-center gap-2 group">
+            <button @click="toggleShoppingItem(item)"
+              class="w-4 h-4 rounded flex items-center justify-center text-[10px] transition-all shrink-0"
+              :class="item.done ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'border border-slate-700 text-slate-700 hover:border-slate-500'"
+              x-text="item.done ? '✓' : ''"></button>
+            <span class="flex-1 text-sm min-w-0 truncate"
+              :class="item.done ? 'text-slate-600 line-through' : 'text-slate-300'"
+              x-text="item.text"></span>
+            <button @click="deleteShoppingItem(item)"
+              class="opacity-0 group-hover:opacity-100 text-red-500/50 hover:text-red-400 text-xs transition-opacity shrink-0">×</button>
+          </div>
+        </template>
+      </div>
+      <div class="mt-2">
+        <input x-model="newShoppingText"
+          @keydown.enter="addShoppingItem()"
+          type="text" placeholder="+ item (ou item1, item2…)"
+          class="w-full px-2 py-1.5 text-xs placeholder-slate-700" />
+      </div>
+      <div x-show="shopping.length === 0" class="text-xs text-slate-700 italic mt-1">
+        Lista vazia ✨
+      </div>
+    </div>
+
   </aside>
 </div>
 
@@ -1201,6 +1329,24 @@
               @change="modalAutosave('actual_hours', modal.task.actual_hours || null)"
               type="number" min="0" step="0.5" placeholder="0"
               class="w-full px-3 py-1.5 text-xs" />
+          </div>
+        </div>
+
+        <div class="mb-4" x-show="getProjectContext(modal.task?.project_slug) === 'personal'">
+          <p class="text-xs font-bold text-slate-500 mb-2">Esforço (pontos)</p>
+          <div class="flex gap-2">
+            <button @click="modal.task.effort = 1; modalAutosave('effort', 1)"
+              class="flex-1 py-2 rounded-lg text-center text-xs font-bold transition-all"
+              :class="modal.task?.effort === 1 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'text-slate-500 border border-slate-700 hover:border-slate-500'"
+              >🟢 Baixo · +1</button>
+            <button @click="modal.task.effort = 2; modalAutosave('effort', 2)"
+              class="flex-1 py-2 rounded-lg text-center text-xs font-bold transition-all"
+              :class="modal.task?.effort === 2 ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40' : 'text-slate-500 border border-slate-700 hover:border-slate-500'"
+              >🟡 Médio · +3</button>
+            <button @click="modal.task.effort = 3; modalAutosave('effort', 3)"
+              class="flex-1 py-2 rounded-lg text-center text-xs font-bold transition-all"
+              :class="modal.task?.effort === 3 ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'text-slate-500 border border-slate-700 hover:border-slate-500'"
+              >🔴 Alto · +5</button>
           </div>
         </div>
 
@@ -1725,6 +1871,17 @@ function pedroOS() {
     noteModal: { show: false, note: null },
     _noteDebounce: {},
 
+    // Habits & Points
+    momentum: { streak: 0, total_points: 0, today_points: 0, tasks_proposed: 0, tasks_done: 0, completion_pct: 0, grade: 'neutral', habits: [], week: [] },
+    habits: [],
+    showHabitModal: false,
+    newHabit: { name: '', frequency: 'daily', points_done: 3, points_missed: -2 },
+
+    // Shopping
+    shopping: [],
+    newShoppingText: '',
+    showShopping: true,
+
     // ── init ──────────────────────────────────────────────────────────────
     async init() {
       this.applyContextColors();
@@ -1735,6 +1892,9 @@ function pedroOS() {
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
       }
+      await this.loadMomentum();
+      await this.loadHabits();
+      await this.loadShopping();
     },
 
     _notifiedMeetings: new Set(),
@@ -1837,6 +1997,9 @@ function pedroOS() {
         this.loadPersonalCalendar(),
         this.loadPendingEvents(),
         this.loadNotes(),
+        this.loadMomentum(),
+        this.loadHabits(),
+        this.loadShopping(),
       ]);
       this.updateTitle();
     },
@@ -2749,12 +2912,92 @@ function pedroOS() {
         await this.loadPersonalCalendar();
         this._checkMeetingNotifications();
         this._checkTaskReminders();
+        if (this.context === 'personal') {
+          await this.loadMomentum();
+          await this.loadShopping();
+        }
       };
       poll();
       setInterval(poll, 30000);
       setInterval(() => {
         this.currentTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       }, 1000);
+    },
+
+    // ── habits & momentum ─────────────────────────────────────────────────
+    async loadMomentum() {
+      const res = await this.api('/api/habits/today');
+      if (res && !res._error) this.momentum = res;
+    },
+
+    async loadHabits() {
+      const res = await this.api('/api/habits');
+      if (res && !res._error) this.habits = res;
+    },
+
+    async toggleHabit(habit) {
+      const newDone = habit.done ? 0 : 1;
+      const endpoint = newDone ? 'check' : 'uncheck';
+      await this.api(`/api/habits/${habit.habit_id}/${endpoint}`, 'POST');
+      habit.done = newDone;
+      await this.loadMomentum();
+    },
+
+    async createHabit() {
+      if (!this.newHabit.name.trim()) return;
+      await this.api('/api/habits', 'POST', this.newHabit);
+      this.newHabit = { name: '', frequency: 'daily', points_done: 3, points_missed: -2 };
+      this.showHabitModal = false;
+      await this.loadHabits();
+      await this.loadMomentum();
+    },
+
+    async deleteHabit(id) {
+      await this.api(`/api/habits/${id}`, 'DELETE');
+      await this.loadHabits();
+      await this.loadMomentum();
+    },
+
+    gradeEmoji(grade) {
+      return { good: '✅', neutral: '🟡', bad: '❌' }[grade] || '⬜';
+    },
+
+    // ── shopping ──────────────────────────────────────────────────────────
+    async loadShopping() {
+      const res = await this.api('/api/shopping');
+      if (res && !res._error) this.shopping = res;
+    },
+
+    async addShoppingItem() {
+      const text = this.newShoppingText.trim();
+      if (!text) return;
+      const items = text.split(',').map(i => i.trim()).filter(Boolean);
+      if (items.length > 1) {
+        await this.api('/api/shopping/bulk', 'POST', { items });
+      } else {
+        await this.api('/api/shopping', 'POST', { text: items[0] });
+      }
+      this.newShoppingText = '';
+      await this.loadShopping();
+    },
+
+    async toggleShoppingItem(item) {
+      const newDone = item.done ? 0 : 1;
+      await this.api(`/api/shopping/${item.id}`, 'PATCH', { done: newDone });
+      item.done = newDone;
+      if (newDone) {
+        setTimeout(() => { this.shopping = this.shopping.filter(i => i.id !== item.id); }, 600);
+      }
+    },
+
+    async deleteShoppingItem(item) {
+      await this.api(`/api/shopping/${item.id}`, 'DELETE');
+      this.shopping = this.shopping.filter(i => i.id !== item.id);
+    },
+
+    async clearDoneShopping() {
+      await this.api('/api/shopping/clear-done', 'POST');
+      this.shopping = this.shopping.filter(i => !i.done);
     },
 
     async api(path, method = 'GET', body = null) {
@@ -2967,5 +3210,53 @@ function inboxCard(task) {
   };
 }
 </script>
+
+<!-- HABIT MODAL -->
+<div x-show="showHabitModal" x-cloak
+  class="fixed inset-0 z-50 flex items-center justify-center px-4"
+  style="background:rgba(0,0,0,0.7);backdrop-filter:blur(4px)"
+  @click.self="showHabitModal = false"
+  @keydown.escape.window="showHabitModal = false">
+  <div class="card w-full max-w-sm p-5 shadow-2xl slide-up">
+    <h3 class="text-base font-bold text-white mb-4">Novo Hábito</h3>
+    <div class="flex flex-col gap-3">
+      <div>
+        <label class="text-xs text-slate-500 mb-1 block font-semibold">Nome</label>
+        <input x-model="newHabit.name" placeholder="Ex: Natação, Academia, Leitura…"
+          @keydown.enter="createHabit()"
+          class="w-full px-3 py-2 text-sm placeholder-slate-600" />
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 mb-1 block font-semibold">Frequência</label>
+        <select x-model="newHabit.frequency" class="w-full px-2 py-1.5 text-xs">
+          <option value="daily">Todo dia</option>
+          <option value="mon,wed,fri">Seg, Qua, Sex</option>
+          <option value="tue,thu">Ter, Qui</option>
+          <option value="mon,tue,wed,thu,fri">Dias úteis</option>
+          <option value="sat,sun">Fim de semana</option>
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-xs text-slate-500 mb-1 block font-semibold">Pts se fizer</label>
+          <input x-model.number="newHabit.points_done" type="number" min="1" max="10"
+            class="w-full px-2 py-1.5 text-xs" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-500 mb-1 block font-semibold">Pts se faltar</label>
+          <input x-model.number="newHabit.points_missed" type="number" min="-10" max="0"
+            class="w-full px-2 py-1.5 text-xs" />
+        </div>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button @click="showHabitModal = false"
+        class="text-xs text-slate-400 px-3 py-2 rounded-lg"
+        style="border:1px solid var(--border2)">Cancelar</button>
+      <button @click="createHabit()"
+        class="text-xs font-bold text-white px-4 py-2 rounded-lg bg-ac">Criar</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

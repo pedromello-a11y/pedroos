@@ -217,6 +217,78 @@ async def whatsapp_webhook(payload: dict, db: AsyncSession = Depends(get_db)):
             await send_whatsapp(from_jid, response_text)
         return {"ok": True, "response": response_text}
 
+    # ── comprar: cria itens na lista de compras ──────────────────────────
+    if text.lower().startswith("comprar:") or text.lower().startswith("compras:"):
+        items_text = text.split(":", 1)[1].strip()
+        items_list = [i.strip() for i in items_text.split(",") if i.strip()]
+        if items_list:
+            from app.features.shopping.service import create_items_bulk
+            created = await create_items_bulk(db, items_list)
+            count = len(created)
+            response_text = f"🛒 {count} item{'s' if count != 1 else ''} adicionado{'s' if count != 1 else ''} à lista de compras"
+            if count <= 5:
+                for item in created:
+                    response_text += f"\n  · {item.text}"
+        else:
+            response_text = "❌ Formato: *comprar: item1, item2, item3*"
+
+        if from_jid:
+            await send_whatsapp(from_jid, response_text)
+        return {"ok": True, "response": response_text}
+
+    # ── compras: lista itens pendentes ───────────────────────────────────
+    if text.lower().strip() in ("compras", "lista", "mercado"):
+        from app.features.shopping.service import list_items
+        items = await list_items(db, include_done=False)
+        if items:
+            response_text = f"🛒 *Lista de compras* ({len(items)} itens):\n"
+            for item in items:
+                response_text += f"\n  · {item.text}"
+        else:
+            response_text = "🛒 Lista de compras vazia ✨"
+
+        if from_jid:
+            await send_whatsapp(from_jid, response_text)
+        return {"ok": True, "response": response_text}
+
+    # ── fui <hábito>: marca hábito como feito ────────────────────────────
+    if text.lower().strip().startswith("fui "):
+        habit_name = text[4:].strip().lower()
+        from app.features.habits.service import list_habits, mark_habit
+        habits = await list_habits(db, active_only=True)
+        matched = next((h for h in habits if habit_name in h.name.lower()), None)
+        if matched:
+            log = await mark_habit(db, matched.id, done=1)
+            response_text = f"✅ *{matched.name}* marcado! +{matched.points_done} pts"
+        else:
+            names = ", ".join(h.name for h in habits)
+            response_text = f"❓ Hábito '{habit_name}' não encontrado. Ativos: {names}"
+
+        if from_jid:
+            await send_whatsapp(from_jid, response_text)
+        return {"ok": True, "response": response_text}
+
+    # ── score: mostra status do dia ──────────────────────────────────────
+    if text.lower().strip() in ("score", "pontos", "streak"):
+        from app.features.habits.service import get_today_status
+        status = await get_today_status(db)
+        grade_emoji = {"good": "✅", "neutral": "🟡", "bad": "❌"}.get(status["grade"], "⬜")
+        response_text = (
+            f"🔥 *Streak:* {status['streak']} dias\n"
+            f"💰 *Total:* {status['total_points']} pts\n"
+            f"📊 *Hoje:* {status['today_points']:+d} pts · {status['completion_pct']}% {grade_emoji}\n"
+            f"📋 Tarefas: {status['tasks_done']}/{status['tasks_proposed']}"
+        )
+        if status["habits"]:
+            response_text += "\n\n🏋️ *Hábitos:*"
+            for h in status["habits"]:
+                emoji = "✅" if h["done"] else "⬜"
+                response_text += f"\n  {emoji} {h['name']}"
+
+        if from_jid:
+            await send_whatsapp(from_jid, response_text)
+        return {"ok": True, "response": response_text}
+
     is_command, response_text = await handle_command(text, db, projects)
 
     if not is_command:

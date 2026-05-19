@@ -14,6 +14,7 @@ class TaskCreate(BaseModel):
     source: Literal["whatsapp", "dashboard", "jira"] = "dashboard"
     parent_id: Optional[str] = None
     jira_key: Optional[str] = None
+    effort: int = 1
 
 
 class TaskUpdate(BaseModel):
@@ -32,6 +33,7 @@ class TaskUpdate(BaseModel):
     actual_hours: Optional[float] = None
     position: Optional[int] = None
     remind_at: Optional[str] = None
+    effort: Optional[int] = None
 
     @field_validator("deadline", "snoozed_until", "remind_at", mode="before")
     @classmethod
@@ -98,6 +100,7 @@ class TaskResponse(BaseModel):
     actual_hours: Optional[float] = None
     position: Optional[int] = None
     remind_at: Optional[str] = None
+    effort: int = 1
     source: str
     created_at: str
     reviewed_at: Optional[str] = None

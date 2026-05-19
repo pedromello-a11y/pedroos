@@ -28,6 +28,8 @@ async def lifespan(app: FastAPI):
     from app.features.tasks.models import Task, Checklist, TaskLink, TaskImage, WaProcessed  # noqa: F401
     from app.features.integrations.models import PendingCalendarEvent  # noqa: F401
     from app.features.notes.models import Note  # noqa: F401
+    from app.features.habits.models import Habit, HabitLog, DayScore  # noqa: F401
+    from app.features.shopping.models import ShoppingItem  # noqa: F401
 
     os.makedirs("data", exist_ok=True)
 
@@ -58,6 +60,10 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("ALTER TABLE tasks ADD COLUMN remind_at TEXT"))
         except Exception:
             pass
+        try:
+            await conn.execute(text("ALTER TABLE tasks ADD COLUMN effort INTEGER DEFAULT 1"))
+        except Exception:
+            pass
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Project).limit(1))
@@ -68,6 +74,14 @@ async def lifespan(app: FastAPI):
                     slug=slug, name=name, description=desc,
                     color=color, position=pos, created_at=now,
                 ))
+            await db.commit()
+
+    async with AsyncSessionLocal() as db:
+        from app.features.habits.models import Habit
+        result = await db.execute(select(Habit).limit(1))
+        if not result.scalar_one_or_none():
+            now = now_brt().isoformat()
+            db.add(Habit(id="habit-natacao", name="Natação", frequency="tue,thu", points_done=3, points_missed=-2, active=1, created_at=now))
             await db.commit()
 
     from app.scheduler import start_scheduler
@@ -92,6 +106,8 @@ from app.features.projects.router import router as projects_router
 from app.features.whatsapp.router import router as whatsapp_router
 from app.features.integrations.router import router as integrations_router
 from app.features.notes.router import router as notes_router
+from app.features.habits.router import router as habits_router
+from app.features.shopping.router import router as shopping_router
 
 app.include_router(tasks_router)
 app.include_router(checklist_router)
@@ -102,6 +118,8 @@ app.include_router(projects_router)
 app.include_router(whatsapp_router)
 app.include_router(integrations_router)
 app.include_router(notes_router)
+app.include_router(habits_router)
+app.include_router(shopping_router)
 
 
 UPLOADS_DIR = os.environ.get("UPLOADS_DIR") or os.path.join(os.path.dirname(__file__), "..", "data", "uploads")
