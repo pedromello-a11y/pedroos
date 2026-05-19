@@ -195,12 +195,20 @@ async def calculate_day_score(db: AsyncSession, d: date = None) -> DayScore:
         else:
             grade = "bad"
 
+    # Dia em progresso: não finaliza grade nem streak antes das 23h
+    now = now_brt()
+    is_today_in_progress = (d == now.date() and now.hour < 23)
+
     yesterday = (d - timedelta(days=1)).isoformat()
     prev_result = await db.execute(select(DayScore).where(DayScore.date == yesterday))
     prev = prev_result.scalar_one_or_none()
     prev_streak = prev.streak if prev else 0
 
-    if grade == "good":
+    if is_today_in_progress:
+        # Mantém grade=None (in-progress) e congela streak do dia anterior
+        grade = None
+        streak = prev_streak
+    elif grade == "good":
         streak = prev_streak + 1
     elif grade == "neutral":
         streak = prev_streak
