@@ -2502,7 +2502,7 @@ function pedroOS() {
     },
 
     getProjectContext(slug) {
-      if (!slug) return this.context; // sem projeto: usa contexto atual
+      if (!slug) return 'hotmart'; // sem projeto: cai no Hotmart por padrão
       const stored = JSON.parse(localStorage.getItem('pedro_proj_ctx') || '{}');
       if (stored[slug] !== undefined) return stored[slug];
       const personalKeywords = ['pessoal', 'personal', 'vida', 'casa', 'saude', 'hobby'];
