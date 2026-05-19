@@ -10,6 +10,7 @@ class Habit(Base):
     icon = Column(Text, default="⭐")
     frequency = Column(Text, nullable=False)  # "daily", "mon,wed,fri", "flex"
     difficulty = Column(Integer, default=2)   # 1=fácil, 2=médio, 3=difícil
+    weekly_target = Column(Integer, nullable=True)  # flex: vezes por semana
     active = Column(Integer, default=1)
     created_at = Column(Text, nullable=False)
 

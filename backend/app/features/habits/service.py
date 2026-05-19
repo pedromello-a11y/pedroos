@@ -12,6 +12,23 @@ from app.shared.dates import now_brt, today_brt
 DAYS_MAP = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 
 
+def _week_start(d: date) -> date:
+    return d - timedelta(days=d.weekday())
+
+
+async def _count_week_done(db: AsyncSession, habit_id: str, d: date) -> int:
+    ws = _week_start(d)
+    result = await db.execute(
+        select(func.count(HabitLog.id)).where(
+            HabitLog.habit_id == habit_id,
+            HabitLog.date >= ws.isoformat(),
+            HabitLog.date <= d.isoformat(),
+            HabitLog.done == 1,
+        )
+    )
+    return result.scalar() or 0
+
+
 def _habit_days(frequency: str) -> list[int]:
     if frequency == "daily":
         return [0, 1, 2, 3, 4, 5, 6]
@@ -37,6 +54,7 @@ async def create_habit(db: AsyncSession, data: HabitCreate) -> Habit:
         icon=data.icon,
         frequency=data.frequency,
         difficulty=data.difficulty,
+        weekly_target=data.weekly_target,
         active=1,
         created_at=now_brt().isoformat(),
     )
@@ -120,8 +138,47 @@ async def mark_habit(db: AsyncSession, habit_id: str, d: date = None, done: int 
         return None
 
     pts = _get_points(habit.difficulty)
-    points = pts["done"] if done else pts["missed"]
 
+    # Weekly-target flex habits: append-mode (multiple logs per week allowed)
+    if habit.weekly_target and habit.frequency == "flex":
+        if done == 1:
+            week_done = await _count_week_done(db, habit_id, d)
+            if week_done >= habit.weekly_target:
+                # Already at target — return most recent log without creating new
+                last = await db.execute(
+                    select(HabitLog).where(HabitLog.habit_id == habit_id, HabitLog.done == 1)
+                    .order_by(HabitLog.created_at.desc()).limit(1)
+                )
+                return last.scalar_one_or_none()
+            log = HabitLog(
+                id=str(uuid.uuid4()),
+                habit_id=habit_id,
+                date=date_str,
+                done=1,
+                points=pts["done"],
+                created_at=now_brt().isoformat(),
+            )
+            db.add(log)
+            await db.commit()
+            await db.refresh(log)
+            return log
+        else:  # uncheck: delete last done log of the week
+            ws = _week_start(d)
+            last = await db.execute(
+                select(HabitLog).where(
+                    HabitLog.habit_id == habit_id,
+                    HabitLog.date >= ws.isoformat(),
+                    HabitLog.done == 1,
+                ).order_by(HabitLog.created_at.desc()).limit(1)
+            )
+            log = last.scalar_one_or_none()
+            if log:
+                await db.delete(log)
+                await db.commit()
+            return log
+
+    # Regular habits: upsert per day
+    points = pts["done"] if done else pts["missed"]
     existing = await db.execute(
         select(HabitLog).where(HabitLog.habit_id == habit_id, HabitLog.date == date_str)
     )
@@ -206,6 +263,24 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
             select(HabitLog).where(HabitLog.habit_id == habit.id, HabitLog.date == date_str)
         )
         log = log_result.scalar_one_or_none()
+
+        if habit.frequency == "flex" and habit.weekly_target:
+            week_done = await _count_week_done(db, habit.id, d)
+            result.append(HabitTodayItem(
+                habit_id=habit.id,
+                name=habit.name,
+                icon=habit.icon or "⭐",
+                frequency=habit.frequency,
+                difficulty=habit.difficulty,
+                weekly_target=habit.weekly_target,
+                week_done=week_done,
+                points_done=pts["done"],
+                points_missed=abs(pts["missed"]),
+                done=1 if week_done >= habit.weekly_target else 0,
+                proposed=True,
+                streak=0,
+            ))
+            continue
 
         if habit.frequency == "flex" and not log:
             result.append(HabitTodayItem(

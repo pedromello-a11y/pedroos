@@ -72,6 +72,10 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("ALTER TABLE habits ADD COLUMN difficulty INTEGER DEFAULT 2"))
         except Exception:
             pass
+        try:
+            await conn.execute(text("ALTER TABLE habits ADD COLUMN weekly_target INTEGER"))
+        except Exception:
+            pass
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Project).limit(1))

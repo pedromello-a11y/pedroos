@@ -13,6 +13,7 @@ class HabitCreate(BaseModel):
     icon: str = "⭐"
     frequency: str = "daily"  # "daily", "mon,wed,fri", "tue,thu", "flex"
     difficulty: int = 2
+    weekly_target: Optional[int] = None
 
 
 class HabitUpdate(BaseModel):
@@ -20,6 +21,7 @@ class HabitUpdate(BaseModel):
     icon: Optional[str] = None
     frequency: Optional[str] = None
     difficulty: Optional[int] = None
+    weekly_target: Optional[int] = None
     active: Optional[int] = None
 
 
@@ -29,6 +31,7 @@ class HabitResponse(BaseModel):
     icon: str
     frequency: str
     difficulty: int
+    weekly_target: Optional[int] = None
     active: int
     created_at: str
     points_done: int = 0
@@ -45,6 +48,7 @@ class HabitResponse(BaseModel):
             icon=habit.icon or "⭐",
             frequency=habit.frequency,
             difficulty=habit.difficulty,
+            weekly_target=habit.weekly_target,
             active=habit.active,
             created_at=habit.created_at,
             points_done=pts["done"],
@@ -83,6 +87,8 @@ class HabitTodayItem(BaseModel):
     icon: str
     frequency: str
     difficulty: int
+    weekly_target: Optional[int] = None
+    week_done: int = 0
     points_done: int
     points_missed: int
     done: int        # 0=pendente, 1=feito
