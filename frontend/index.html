@@ -1452,30 +1452,65 @@
       <!-- Habits header -->
       <div class="flex items-center justify-between mb-2">
         <span class="section-label">🏋️ Hábitos</span>
-        <button @click="showHabitModal = true" class="text-[10px] text-slate-600 hover:text-slate-300 transition-colors">+ novo</button>
+        <div class="flex items-center gap-2">
+          <button @click="showManageHabits = !showManageHabits"
+            class="text-[10px] transition-colors"
+            :class="showManageHabits ? 'text-cyan-400' : 'text-slate-600 hover:text-slate-300'">gerenciar</button>
+          <button @click="showHabitModal = true" class="text-[10px] text-slate-600 hover:text-slate-300 transition-colors">+ novo</button>
+        </div>
       </div>
 
-      <!-- Habit rows -->
-      <div class="flex flex-col gap-1.5">
+      <!-- Gerenciar: lista de TODOS os hábitos com delete -->
+      <div x-show="showManageHabits" class="flex flex-col gap-1 mb-3 p-2 rounded-xl" style="background:rgba(255,255,255,0.03);border:1px solid var(--border)">
+        <template x-for="habit in habits" :key="habit.id">
+          <div class="flex items-center gap-2 py-0.5">
+            <span class="text-sm leading-none shrink-0" x-text="habit.icon || '⭐'"></span>
+            <span class="flex-1 text-xs text-slate-300 min-w-0 truncate" x-text="habit.name"></span>
+            <span class="text-[9px] text-slate-600 shrink-0 font-mono" x-text="habit.frequency"></span>
+            <template x-if="habit.weekly_target">
+              <span class="text-[9px] px-1 rounded shrink-0" style="background:rgba(139,92,246,0.15);color:#a78bfa">
+                <span x-text="habit.weekly_target + 'x/sem'"></span>
+              </span>
+            </template>
+            <button @click="deleteHabit(habit.id)"
+              class="text-slate-700 hover:text-red-400 text-sm leading-none transition-colors shrink-0 px-1">×</button>
+          </div>
+        </template>
+        <div x-show="habits.length === 0" class="text-xs text-slate-700 italic py-1">Nenhum hábito cadastrado</div>
+      </div>
+
+      <!-- Habit rows (hoje) -->
+      <div x-show="!showManageHabits" class="flex flex-col gap-1.5">
         <template x-for="habit in momentum.habits" :key="habit.habit_id">
           <div class="flex items-center gap-2 group">
-            <!-- Circle check -->
-            <button @click="habit.proposed && toggleHabit(habit)"
-              class="w-6 h-6 rounded-full flex items-center justify-center text-xs transition-all shrink-0 border"
-              :class="habit.done
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                : habit.proposed
-                  ? 'border-slate-700 text-slate-600 hover:border-slate-400'
-                  : 'border-slate-800 text-slate-800 cursor-default'">
-              <span x-show="habit.done">✓</span>
-            </button>
+            <!-- Circle check (weekly: mostra contador) -->
+            <template x-if="habit.week_target">
+              <button @click="toggleHabit(habit)"
+                class="w-6 h-6 rounded-full flex items-center justify-center transition-all shrink-0 border"
+                :class="habit.week_done >= habit.week_target
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                  : 'border-slate-700 text-slate-400 hover:border-purple-400'">
+                <span class="text-[9px] font-bold" x-text="habit.week_done + '/' + habit.week_target"></span>
+              </button>
+            </template>
+            <template x-if="!habit.week_target">
+              <button @click="habit.proposed && toggleHabit(habit)"
+                class="w-6 h-6 rounded-full flex items-center justify-center text-xs transition-all shrink-0 border"
+                :class="habit.done
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                  : habit.proposed
+                    ? 'border-slate-700 text-slate-600 hover:border-slate-400'
+                    : 'border-slate-800 text-slate-800 cursor-default'">
+                <span x-show="habit.done">✓</span>
+              </button>
+            </template>
             <!-- Icon + name -->
             <span class="text-sm leading-none shrink-0" x-text="habit.icon || '⭐'"></span>
             <span class="flex-1 text-sm min-w-0 truncate"
-              :class="habit.done ? 'text-slate-500 line-through' : 'text-slate-300'"
+              :class="(habit.week_target ? habit.week_done >= habit.week_target : habit.done) ? 'text-slate-500 line-through' : 'text-slate-300'"
               x-text="habit.name"></span>
-            <!-- Flex: not yet proposed -->
-            <template x-if="habit.frequency === 'flex' && !habit.proposed">
+            <!-- Flex sem weekly_target: propose buttons -->
+            <template x-if="habit.frequency === 'flex' && !habit.proposed && !habit.week_target">
               <div class="flex items-center gap-1 shrink-0">
                 <span class="text-[9px] px-1.5 py-0.5 rounded font-bold"
                   style="background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3)">flex</span>
@@ -1496,12 +1531,12 @@
                     : 'bg-slate-800'"></span>
               </template>
             </div>
-            <!-- Individual streak -->
-            <span x-show="habit.streak > 0" class="text-[10px] font-mono text-orange-400 shrink-0"
+            <!-- Streak (não-weekly) -->
+            <span x-show="habit.streak > 0 && !habit.week_target" class="text-[10px] font-mono text-orange-400 shrink-0"
               x-text="'🔥' + habit.streak"></span>
             <!-- Points -->
             <span class="text-[10px] font-mono shrink-0"
-              :class="habit.done ? 'text-emerald-400' : 'text-slate-700'"
+              :class="(habit.week_target ? habit.week_done >= habit.week_target : habit.done) ? 'text-emerald-400' : 'text-slate-700'"
               x-text="'+' + habit.points_done"></span>
           </div>
         </template>
@@ -1532,7 +1567,7 @@
     </div>
 
     <!-- DUE TODAY -->
-    <div x-show="context !== 'personal'">
+    <div>
       <div class="flex items-center gap-2 mb-2">
         <span class="section-label ac">☀️ Vence hoje</span>
         <span x-show="filteredTodayTasks.length > 0" class="text-[10px] font-bold ac font-mono" x-text="filteredTodayTasks.length"></span>
@@ -2301,7 +2336,8 @@ function pedroOS() {
     habits: [],
     showHabitModal: false,
     showEmojiPick: false,
-    newHabit: { name: '', icon: '⭐', frequency: 'daily', days: [], difficulty: 2 },
+    showManageHabits: false,
+    newHabit: { name: '', icon: '⭐', frequency: 'daily', days: [], difficulty: 2, weekly_target: 2 },
 
     // Shopping
     shopping: [],
@@ -3402,10 +3438,16 @@ function pedroOS() {
     },
 
     async toggleHabit(habit) {
-      const newDone = habit.done ? 0 : 1;
-      const endpoint = newDone ? 'check' : 'uncheck';
-      await this.api(`/api/habits/${habit.habit_id}/${endpoint}`, 'POST');
-      habit.done = newDone;
+      if (habit.week_target) {
+        // Weekly: check adiciona 1; se já completo, uncheck remove 1
+        const endpoint = habit.week_done < habit.week_target ? 'check' : 'uncheck';
+        await this.api(`/api/habits/${habit.habit_id}/${endpoint}`, 'POST');
+      } else {
+        const newDone = habit.done ? 0 : 1;
+        const endpoint = newDone ? 'check' : 'uncheck';
+        await this.api(`/api/habits/${habit.habit_id}/${endpoint}`, 'POST');
+        habit.done = newDone;
+      }
       await this.loadMomentum();
     },
 
@@ -3419,9 +3461,10 @@ function pedroOS() {
         icon: this.newHabit.icon,
         frequency: freq,
         difficulty: this.newHabit.difficulty,
+        weekly_target: freq === 'flex' ? (this.newHabit.weekly_target || null) : null,
       };
       await this.api('/api/habits', 'POST', payload);
-      this.newHabit = { name: '', icon: '⭐', frequency: 'daily', days: [], difficulty: 2 };
+      this.newHabit = { name: '', icon: '⭐', frequency: 'daily', days: [], difficulty: 2, weekly_target: 2 };
       this.showHabitModal = false;
       this.showEmojiPick = false;
       await this.loadHabits();
@@ -3757,6 +3800,18 @@ function inboxCard(task) {
               : 'text-slate-500 border border-slate-800 hover:border-slate-600'">
             Dias fixos
           </button>
+        </div>
+        <!-- Meta semanal (só flex) -->
+        <div x-show="newHabit.frequency === 'flex'" class="flex items-center gap-3 mt-2">
+          <span class="text-[10px] text-slate-500">Meta semanal</span>
+          <div class="flex items-center gap-1.5">
+            <button @click="newHabit.weekly_target = Math.max(1, (newHabit.weekly_target || 2) - 1)"
+              class="w-6 h-6 rounded border border-slate-700 text-slate-400 text-sm hover:border-slate-500 flex items-center justify-center">−</button>
+            <span class="text-sm font-bold text-white w-6 text-center" x-text="newHabit.weekly_target || 2"></span>
+            <button @click="newHabit.weekly_target = Math.min(7, (newHabit.weekly_target || 2) + 1)"
+              class="w-6 h-6 rounded border border-slate-700 text-slate-400 text-sm hover:border-slate-500 flex items-center justify-center">+</button>
+          </div>
+          <span class="text-[10px] text-slate-500">vezes/semana</span>
         </div>
         <!-- Day selector -->
         <div x-show="newHabit.frequency === 'days'" class="flex gap-1.5 mt-2 flex-wrap">
