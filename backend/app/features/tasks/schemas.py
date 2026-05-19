@@ -9,7 +9,7 @@ class TaskCreate(BaseModel):
     project_slug: Optional[str] = None
     deadline: Optional[str] = None
     priority: Literal["p1", "p2", "p3", "backlog"] = "p3"
-    status: Literal["raw", "todo", "doing", "queued", "backlog", "done"] = "raw"
+    status: Literal["raw", "todo", "doing", "queued", "backlog", "done"] = "queued"
     reviewed: int = 1
     source: Literal["whatsapp", "dashboard", "jira"] = "dashboard"
     parent_id: Optional[str] = None

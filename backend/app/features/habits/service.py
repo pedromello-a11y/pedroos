@@ -5,32 +5,38 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from app.features.habits.models import Habit, HabitLog, DayScore
-from app.features.habits.schemas import HabitCreate, HabitUpdate
+from app.features.habits.schemas import HabitCreate, HabitUpdate, DIFFICULTY_POINTS, HabitTodayItem
 from app.features.tasks.models import Task
 from app.shared.dates import now_brt, today_brt
 
 DAYS_MAP = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
-EFFORT_POINTS = {1: 1, 2: 3, 3: 5}
-EFFORT_MISS = {1: -1, 2: -2, 3: -3}
 
 
 def _habit_days(frequency: str) -> list[int]:
     if frequency == "daily":
         return [0, 1, 2, 3, 4, 5, 6]
+    if frequency == "flex":
+        return []
     return [DAYS_MAP[d.strip().lower()] for d in frequency.split(",") if d.strip().lower() in DAYS_MAP]
 
 
 def _is_habit_day(habit: Habit, d: date) -> bool:
+    if habit.frequency == "flex":
+        return False
     return d.weekday() in _habit_days(habit.frequency)
+
+
+def _get_points(difficulty: int) -> dict:
+    return DIFFICULTY_POINTS.get(difficulty, DIFFICULTY_POINTS[2])
 
 
 async def create_habit(db: AsyncSession, data: HabitCreate) -> Habit:
     habit = Habit(
         id=str(uuid.uuid4()),
         name=data.name,
+        icon=data.icon,
         frequency=data.frequency,
-        points_done=data.points_done,
-        points_missed=data.points_missed,
+        difficulty=data.difficulty,
         active=1,
         created_at=now_brt().isoformat(),
     )
@@ -71,7 +77,8 @@ async def delete_habit(db: AsyncSession, habit_id: str) -> bool:
     return True
 
 
-async def mark_habit(db: AsyncSession, habit_id: str, d: date = None, done: int = 1) -> Optional[HabitLog]:
+async def propose_habit(db: AsyncSession, habit_id: str, d: date = None) -> Optional[HabitLog]:
+    """Propõe um hábito flex para o dia (ex: 'hoje vou correr')."""
     if d is None:
         d = today_brt()
     date_str = d.isoformat()
@@ -85,8 +92,40 @@ async def mark_habit(db: AsyncSession, habit_id: str, d: date = None, done: int 
         select(HabitLog).where(HabitLog.habit_id == habit_id, HabitLog.date == date_str)
     )
     log = existing.scalar_one_or_none()
+    if log:
+        return log
 
-    points = habit.points_done if done else habit.points_missed
+    log = HabitLog(
+        id=str(uuid.uuid4()),
+        habit_id=habit_id,
+        date=date_str,
+        done=0,
+        points=0,
+        created_at=now_brt().isoformat(),
+    )
+    db.add(log)
+    await db.commit()
+    await db.refresh(log)
+    return log
+
+
+async def mark_habit(db: AsyncSession, habit_id: str, d: date = None, done: int = 1) -> Optional[HabitLog]:
+    if d is None:
+        d = today_brt()
+    date_str = d.isoformat()
+
+    result = await db.execute(select(Habit).where(Habit.id == habit_id))
+    habit = result.scalar_one_or_none()
+    if not habit:
+        return None
+
+    pts = _get_points(habit.difficulty)
+    points = pts["done"] if done else pts["missed"]
+
+    existing = await db.execute(
+        select(HabitLog).where(HabitLog.habit_id == habit_id, HabitLog.date == date_str)
+    )
+    log = existing.scalar_one_or_none()
 
     if log:
         log.done = done
@@ -107,7 +146,51 @@ async def mark_habit(db: AsyncSession, habit_id: str, d: date = None, done: int 
     return log
 
 
-async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[dict]:
+async def get_habit_streak(db: AsyncSession, habit_id: str, from_date: date = None) -> int:
+    """Calcula streak individual de um hábito (dias consecutivos feito)."""
+    if from_date is None:
+        from_date = today_brt()
+
+    result = await db.execute(select(Habit).where(Habit.id == habit_id))
+    habit = result.scalar_one_or_none()
+    if not habit:
+        return 0
+
+    streak = 0
+    d = from_date
+
+    for _ in range(90):
+        d_str = d.isoformat()
+        is_day = _is_habit_day(habit, d)
+
+        if habit.frequency == "flex":
+            log_res = await db.execute(
+                select(HabitLog).where(HabitLog.habit_id == habit_id, HabitLog.date == d_str)
+            )
+            log = log_res.scalar_one_or_none()
+            if log:
+                if log.done:
+                    streak += 1
+                else:
+                    break
+        elif is_day:
+            log_res = await db.execute(
+                select(HabitLog).where(HabitLog.habit_id == habit_id, HabitLog.date == d_str)
+            )
+            log = log_res.scalar_one_or_none()
+            if log and log.done:
+                streak += 1
+            elif d < from_date:
+                break
+            else:
+                break
+
+        d -= timedelta(days=1)
+
+    return streak
+
+
+async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTodayItem]:
     if d is None:
         d = today_brt()
     date_str = d.isoformat()
@@ -116,23 +199,46 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[dict]:
     result = []
 
     for habit in habits:
-        if not _is_habit_day(habit, d):
-            continue
+        is_day = _is_habit_day(habit, d)
+        pts = _get_points(habit.difficulty)
 
         log_result = await db.execute(
             select(HabitLog).where(HabitLog.habit_id == habit.id, HabitLog.date == date_str)
         )
         log = log_result.scalar_one_or_none()
 
-        result.append({
-            "habit_id": habit.id,
-            "name": habit.name,
-            "frequency": habit.frequency,
-            "points_done": habit.points_done,
-            "points_missed": habit.points_missed,
-            "done": log.done if log else 0,
-            "logged": log is not None,
-        })
+        if habit.frequency == "flex" and not log:
+            result.append(HabitTodayItem(
+                habit_id=habit.id,
+                name=habit.name,
+                icon=habit.icon or "⭐",
+                frequency=habit.frequency,
+                difficulty=habit.difficulty,
+                points_done=pts["done"],
+                points_missed=abs(pts["missed"]),
+                done=0,
+                proposed=False,
+                streak=await get_habit_streak(db, habit.id, d - timedelta(days=1)),
+            ))
+            continue
+
+        if not is_day and not log:
+            continue
+
+        streak = await get_habit_streak(db, habit.id, d - timedelta(days=1))
+
+        result.append(HabitTodayItem(
+            habit_id=habit.id,
+            name=habit.name,
+            icon=habit.icon or "⭐",
+            frequency=habit.frequency,
+            difficulty=habit.difficulty,
+            points_done=pts["done"],
+            points_missed=abs(pts["missed"]),
+            done=log.done if log else 0,
+            proposed=True,
+            streak=streak + (1 if log and log.done else 0),
+        ))
 
     return result
 
@@ -143,13 +249,11 @@ async def calculate_day_score(db: AsyncSession, d: date = None) -> DayScore:
     date_str = d.isoformat()
 
     result = await db.execute(
-        select(Task).where(
-            Task.deadline == date_str,
-            Task.reviewed == 1,
-            Task.project_slug == "pessoal",
-        )
+        select(Task).where(Task.deadline == date_str, Task.reviewed == 1)
     )
-    proposed_tasks = list(result.scalars().all())
+    all_tasks = list(result.scalars().all())
+    personal_slugs = {"pessoal"}
+    proposed_tasks = [t for t in all_tasks if t.project_slug in personal_slugs or t.project_slug is None]
 
     tasks_proposed = len(proposed_tasks)
     tasks_done = len([t for t in proposed_tasks if t.status == "done"])
@@ -159,30 +263,31 @@ async def calculate_day_score(db: AsyncSession, d: date = None) -> DayScore:
 
     for task in proposed_tasks:
         effort = getattr(task, "effort", None) or 1
+        task_pts = DIFFICULTY_POINTS.get(effort, DIFFICULTY_POINTS[1])
         if task.status == "done":
-            points_earned += EFFORT_POINTS.get(effort, 1)
+            points_earned += task_pts["done"]
         else:
-            points_lost += abs(EFFORT_MISS.get(effort, -1))
+            now = now_brt()
+            if now.date() > d or (now.date() == d and now.hour >= 23):
+                points_lost += abs(task_pts["missed"])
 
     habits_today = await get_habits_for_date(db, d)
     habits_done = 0
     habits_missed = 0
 
     for h in habits_today:
-        if h["done"]:
+        if not h.proposed:
+            continue
+        if h.done:
             habits_done += 1
-            points_earned += h["points_done"]
-        elif h["logged"] and not h["done"]:
-            habits_missed += 1
-            points_lost += abs(h["points_missed"])
+            points_earned += h.points_done
         else:
-            from datetime import datetime
             now = now_brt()
             if now.date() > d or (now.date() == d and now.hour >= 23):
                 habits_missed += 1
-                points_lost += abs(h["points_missed"])
+                points_lost += h.points_missed
 
-    total_items = tasks_proposed + len(habits_today)
+    total_items = tasks_proposed + habits_done + habits_missed
     done_items = tasks_done + habits_done
     if total_items == 0:
         grade = "neutral"
@@ -195,20 +300,12 @@ async def calculate_day_score(db: AsyncSession, d: date = None) -> DayScore:
         else:
             grade = "bad"
 
-    # Dia em progresso: não finaliza grade nem streak antes das 23h
-    now = now_brt()
-    is_today_in_progress = (d == now.date() and now.hour < 23)
-
     yesterday = (d - timedelta(days=1)).isoformat()
     prev_result = await db.execute(select(DayScore).where(DayScore.date == yesterday))
     prev = prev_result.scalar_one_or_none()
     prev_streak = prev.streak if prev else 0
 
-    if is_today_in_progress:
-        # Mantém grade=None (in-progress) e congela streak do dia anterior
-        grade = None
-        streak = prev_streak
-    elif grade == "good":
+    if grade == "good":
         streak = prev_streak + 1
     elif grade == "neutral":
         streak = prev_streak
@@ -248,7 +345,6 @@ async def calculate_day_score(db: AsyncSession, d: date = None) -> DayScore:
 
 async def get_today_status(db: AsyncSession) -> dict:
     today = today_brt()
-    date_str = today.isoformat()
 
     score = await calculate_day_score(db, today)
 
@@ -274,6 +370,7 @@ async def get_today_status(db: AsyncSession) -> dict:
             "day": ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"][d.weekday()],
             "grade": ds.grade if ds else None,
             "points": (ds.points_earned - ds.points_lost) if ds else 0,
+            "is_today": d == today,
         })
 
     total_items = score.tasks_proposed + score.habits_done + score.habits_missed
@@ -281,7 +378,7 @@ async def get_today_status(db: AsyncSession) -> dict:
     pct = int((done_items / total_items) * 100) if total_items > 0 else 0
 
     return {
-        "date": date_str,
+        "date": today.isoformat(),
         "streak": score.streak,
         "total_points": total_points,
         "today_points": score.points_earned - score.points_lost,
@@ -289,24 +386,6 @@ async def get_today_status(db: AsyncSession) -> dict:
         "tasks_done": score.tasks_done,
         "completion_pct": pct,
         "grade": score.grade or "neutral",
-        "habits": habits,
+        "habits": [h.model_dump() for h in habits],
         "week": week,
     }
-
-
-async def get_week_scores(db: AsyncSession) -> list[dict]:
-    today = today_brt()
-    week = []
-    for i in range(6, -1, -1):
-        d = today - timedelta(days=i)
-        d_str = d.isoformat()
-        res = await db.execute(select(DayScore).where(DayScore.date == d_str))
-        ds = res.scalar_one_or_none()
-        week.append({
-            "date": d_str,
-            "day": ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"][d.weekday()],
-            "grade": ds.grade if ds else None,
-            "points": (ds.points_earned - ds.points_lost) if ds else 0,
-            "streak": ds.streak if ds else 0,
-        })
-    return week

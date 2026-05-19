@@ -1,32 +1,55 @@
 from pydantic import BaseModel
 from typing import Optional, List
 
+DIFFICULTY_POINTS = {
+    1: {"done": 1, "missed": -1},
+    2: {"done": 3, "missed": -2},
+    3: {"done": 5, "missed": -3},
+}
+
 
 class HabitCreate(BaseModel):
     name: str
-    frequency: str = "daily"
-    points_done: int = 3
-    points_missed: int = -2
+    icon: str = "⭐"
+    frequency: str = "daily"  # "daily", "mon,wed,fri", "tue,thu", "flex"
+    difficulty: int = 2
 
 
 class HabitUpdate(BaseModel):
     name: Optional[str] = None
+    icon: Optional[str] = None
     frequency: Optional[str] = None
-    points_done: Optional[int] = None
-    points_missed: Optional[int] = None
+    difficulty: Optional[int] = None
     active: Optional[int] = None
 
 
 class HabitResponse(BaseModel):
     id: str
     name: str
+    icon: str
     frequency: str
-    points_done: int
-    points_missed: int
+    difficulty: int
     active: int
     created_at: str
+    points_done: int = 0
+    points_missed: int = 0
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_habit(cls, habit):
+        pts = DIFFICULTY_POINTS.get(habit.difficulty, DIFFICULTY_POINTS[2])
+        return cls(
+            id=habit.id,
+            name=habit.name,
+            icon=habit.icon or "⭐",
+            frequency=habit.frequency,
+            difficulty=habit.difficulty,
+            active=habit.active,
+            created_at=habit.created_at,
+            points_done=pts["done"],
+            points_missed=abs(pts["missed"]),
+        )
 
 
 class HabitLogResponse(BaseModel):
@@ -54,6 +77,19 @@ class DayScoreResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class HabitTodayItem(BaseModel):
+    habit_id: str
+    name: str
+    icon: str
+    frequency: str
+    difficulty: int
+    points_done: int
+    points_missed: int
+    done: int        # 0=pendente, 1=feito
+    proposed: bool   # True se é dia deste hábito ou foi proposto manualmente
+    streak: int
+
+
 class TodayStatus(BaseModel):
     date: str
     streak: int
@@ -63,5 +99,5 @@ class TodayStatus(BaseModel):
     tasks_done: int
     completion_pct: int
     grade: str
-    habits: List[dict]
+    habits: List[HabitTodayItem]
     week: List[dict]

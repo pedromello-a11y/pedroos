@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Google Calendar (OAuth2)
     google_client_id: str = ""
     google_client_secret: str = ""
-    google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
+    google_redirect_uri: str = "https://pedroos.fly.dev/api/auth/google/callback"
     google_refresh_token: str = ""  # preenchido automaticamente após o primeiro login
 
     # Google Calendar (fallback ICS — só funciona se a agenda for pública)
