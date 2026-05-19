@@ -7,9 +7,9 @@ class Habit(Base):
 
     id = Column(Text, primary_key=True)
     name = Column(Text, nullable=False)
-    frequency = Column(Text, nullable=False)  # "tue,thu" ou "mon,wed,fri" ou "daily"
-    points_done = Column(Integer, default=3)
-    points_missed = Column(Integer, default=-2)
+    icon = Column(Text, default="⭐")
+    frequency = Column(Text, nullable=False)  # "daily", "mon,wed,fri", "flex"
+    difficulty = Column(Integer, default=2)   # 1=fácil, 2=médio, 3=difícil
     active = Column(Integer, default=1)
     created_at = Column(Text, nullable=False)
 
@@ -20,7 +20,7 @@ class HabitLog(Base):
     id = Column(Text, primary_key=True)
     habit_id = Column(Text, nullable=False)
     date = Column(Text, nullable=False)
-    done = Column(Integer, default=0)
+    done = Column(Integer, default=0)   # 0=não fez, 1=fez
     points = Column(Integer, default=0)
     created_at = Column(Text, nullable=False)
 

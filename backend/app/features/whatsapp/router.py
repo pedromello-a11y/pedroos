@@ -305,6 +305,7 @@ async def whatsapp_webhook(payload: dict, db: AsyncSession = Depends(get_db)):
             project_slug=forced_project or parsed.get("project_slug") or None,
             deadline=parsed.get("deadline") or None,
             priority=parsed.get("priority") or "p3",
+            status="queued",
             reviewed=0,
             source="whatsapp",
         )

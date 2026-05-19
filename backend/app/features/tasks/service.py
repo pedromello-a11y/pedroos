@@ -155,6 +155,8 @@ async def review_task(db: AsyncSession, task_id: str) -> Optional[Task]:
         task.reviewed = 1
         task.reviewed_at = now_brt().isoformat()
         task.updated_at = now_brt().isoformat()
+        if task.status in (None, 'raw'):
+            task.status = 'todo'
         await db.commit()
         await db.refresh(task)
     return task

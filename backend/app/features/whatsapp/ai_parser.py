@@ -33,9 +33,9 @@ def _parse_date(token: str) -> date | None:
     today = today_brt()
     t = token.strip().lower()
 
-    if t in ("hoje", "today"):
+    if t in ("hoje", "hj", "today"):
         return today
-    if t in ("amanhã", "amanha", "tomorrow"):
+    if t in ("amanhã", "amanha", "manha", "tmr", "tomorrow"):
         return today + timedelta(days=1)
     if t in ("depois de amanhã", "depois de amanha"):
         return today + timedelta(days=2)

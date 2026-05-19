@@ -64,6 +64,14 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("ALTER TABLE tasks ADD COLUMN effort INTEGER DEFAULT 1"))
         except Exception:
             pass
+        try:
+            await conn.execute(text("ALTER TABLE habits ADD COLUMN icon TEXT DEFAULT '⭐'"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE habits ADD COLUMN difficulty INTEGER DEFAULT 2"))
+        except Exception:
+            pass
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Project).limit(1))
@@ -81,7 +89,8 @@ async def lifespan(app: FastAPI):
         result = await db.execute(select(Habit).limit(1))
         if not result.scalar_one_or_none():
             now = now_brt().isoformat()
-            db.add(Habit(id="habit-natacao", name="Natação", frequency="tue,thu", points_done=3, points_missed=-2, active=1, created_at=now))
+            db.add(Habit(id="habit-natacao", name="Natação", icon="🏊", frequency="mon,wed", difficulty=2, active=1, created_at=now))
+            db.add(Habit(id="habit-corrida", name="Corrida", icon="🏃", frequency="flex", difficulty=2, active=1, created_at=now))
             await db.commit()
 
     from app.scheduler import start_scheduler
