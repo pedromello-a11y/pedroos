@@ -94,6 +94,7 @@ class HabitTodayItem(BaseModel):
     done: int        # 0=pendente, 1=feito
     proposed: bool   # True se é dia deste hábito ou foi proposto manualmente
     streak: int
+    week_progress: List[dict] = []  # [{label, done, is_today, date}]
 
 
 class TodayStatus(BaseModel):

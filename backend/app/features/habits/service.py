@@ -247,6 +247,60 @@ async def get_habit_streak(db: AsyncSession, habit_id: str, from_date: date = No
     return streak
 
 
+DAY_LABELS_PT = {"mon": "seg", "tue": "ter", "wed": "qua", "thu": "qui", "fri": "sex", "sat": "sáb", "sun": "dom"}
+
+
+async def _compute_week_progress(db: AsyncSession, habit: Habit, d: date) -> list[dict]:
+    """Retorna progresso semanal pra UI: list de {label, done, is_today, date}."""
+    ws = _week_start(d)
+    progress: list[dict] = []
+
+    if habit.frequency == "flex" and habit.weekly_target:
+        # N slots, preenche conforme done na semana
+        we = ws + timedelta(days=6)
+        res = await db.execute(
+            select(HabitLog).where(
+                HabitLog.habit_id == habit.id,
+                HabitLog.date >= ws.isoformat(),
+                HabitLog.date <= we.isoformat(),
+                HabitLog.done == 1,
+            )
+        )
+        done_count = len(list(res.scalars().all()))
+        for i in range(habit.weekly_target):
+            progress.append({
+                "label": "",
+                "done": i < done_count,
+                "is_today": False,
+                "date": None,
+            })
+        return progress
+
+    if habit.frequency in ("daily", "flex"):
+        # daily ou flex sem target: sem progresso semanal específico
+        return progress
+
+    # Dias específicos tipo "mon,wed"
+    day_codes = [c.strip() for c in habit.frequency.split(",") if c.strip() in DAYS_MAP]
+    for code in day_codes:
+        day_date = ws + timedelta(days=DAYS_MAP[code])
+        log_res = await db.execute(
+            select(HabitLog).where(
+                HabitLog.habit_id == habit.id,
+                HabitLog.date == day_date.isoformat(),
+                HabitLog.done == 1,
+            ).order_by(HabitLog.created_at.desc()).limit(1)
+        )
+        log = log_res.scalar_one_or_none()
+        progress.append({
+            "label": DAY_LABELS_PT[code],
+            "done": log is not None,
+            "is_today": day_date == d,
+            "date": day_date.isoformat(),
+        })
+    return progress
+
+
 async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTodayItem]:
     if d is None:
         d = today_brt()
@@ -265,6 +319,8 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
         )
         log = log_result.scalar_one_or_none()
 
+        week_progress = await _compute_week_progress(db, habit, d)
+
         if habit.frequency == "flex" and habit.weekly_target:
             week_done = await _count_week_done(db, habit.id, d)
             result.append(HabitTodayItem(
@@ -280,6 +336,7 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
                 done=1 if week_done >= habit.weekly_target else 0,
                 proposed=True,
                 streak=0,
+                week_progress=week_progress,
             ))
             continue
 
@@ -295,6 +352,7 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
                 done=0,
                 proposed=False,
                 streak=await get_habit_streak(db, habit.id, d - timedelta(days=1)),
+                week_progress=week_progress,
             ))
             continue
 
@@ -314,6 +372,7 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
             done=log.done if log else 0,
             proposed=True,
             streak=streak + (1 if log and log.done else 0),
+            week_progress=week_progress,
         ))
 
     return result

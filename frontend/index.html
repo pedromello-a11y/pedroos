@@ -1684,7 +1684,36 @@
                 <span x-show="habit.streak >= 2" class="habit-streak-fire"
                   x-text="'🔥' + habit.streak"></span>
               </div>
-              <div class="flex gap-1 mt-1">
+              <!-- Week progress (specific days or flex target) -->
+              <div x-show="habit.week_progress && habit.week_progress.length" class="flex items-center gap-2 mt-1.5 flex-wrap">
+                <template x-for="(p, i) in (habit.week_progress || [])" :key="i">
+                  <div class="flex items-center gap-1">
+                    <span x-show="p.label"
+                      class="text-[8px] font-bold uppercase tracking-wider leading-none"
+                      :class="p.is_today ? 'text-cyan-300' : (p.done ? 'text-emerald-400/70' : 'text-slate-600')"
+                      x-text="p.label"></span>
+                    <span class="w-2 h-2 rounded-full transition-all"
+                      :class="{
+                        'bg-emerald-400': p.done,
+                        'bg-slate-800 ring-1 ring-cyan-400/60': !p.done && p.is_today,
+                        'bg-slate-800': !p.done && !p.is_today
+                      }"
+                      :style="p.done && p.is_today ? 'box-shadow:0 0 6px rgba(16,185,129,0.7)' : (p.is_today ? 'box-shadow:0 0 6px rgba(34,211,238,0.4)' : '')"></span>
+                  </div>
+                </template>
+                <!-- Compact difficulty after progress -->
+                <span class="text-[8px] text-slate-700 leading-none">·</span>
+                <div class="flex gap-0.5">
+                  <span class="w-1 h-1 rounded-full"
+                    :class="habit.difficulty >= 1 ? 'bg-emerald-400/60' : 'bg-slate-800'"></span>
+                  <span class="w-1 h-1 rounded-full"
+                    :class="habit.difficulty >= 2 ? 'bg-yellow-400/60' : 'bg-slate-800'"></span>
+                  <span class="w-1 h-1 rounded-full"
+                    :class="habit.difficulty >= 3 ? 'bg-red-400/60' : 'bg-slate-800'"></span>
+                </div>
+              </div>
+              <!-- Fallback: só dificuldade (hábitos daily sem progresso semanal) -->
+              <div x-show="!habit.week_progress || !habit.week_progress.length" class="flex gap-1 mt-1">
                 <span class="w-1.5 h-1.5 rounded-full"
                   :class="habit.difficulty >= 1 ? 'bg-emerald-400' : 'bg-slate-800'"></span>
                 <span class="w-1.5 h-1.5 rounded-full"
