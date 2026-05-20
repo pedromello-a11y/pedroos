@@ -486,6 +486,12 @@ async def get_today_status(db: AsyncSession) -> dict:
 
     habits = await get_habits_for_date(db, today)
 
+    # Conta ações individuais: cada check conta pro combo (não só meta semanal completa)
+    habit_actions = sum(1 for h in habits if h.done or h.week_done > 0)
+    combo = _compute_combo(score.tasks_done, habit_actions)
+    new_records = await _check_and_update_records(db, today, score, combo)
+    milestones = _get_milestones(score, combo)
+
     week = []
     for i in range(6, -1, -1):
         d = today - timedelta(days=i)
@@ -503,10 +509,6 @@ async def get_today_status(db: AsyncSession) -> dict:
     total_items = score.tasks_proposed + score.habits_done + score.habits_missed
     done_items = score.tasks_done + score.habits_done
     pct = int((done_items / total_items) * 100) if total_items > 0 else 0
-
-    combo = _compute_combo(score.tasks_done, score.habits_done)
-    new_records = await _check_and_update_records(db, today, score, combo)
-    milestones = _get_milestones(score, combo)
 
     return {
         "date": today.isoformat(),

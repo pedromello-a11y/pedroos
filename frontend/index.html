@@ -3804,7 +3804,16 @@ function pedroOS() {
       if (this.notesQ)       params.set('q', this.notesQ);
       const qs = params.toString() ? '?' + params.toString() : '';
       const res = await this.api(`/api/notes${qs}`);
-      this.notes = res || [];
+      const all = res || [];
+      if (!this.notesProject) {
+        if (this.context === 'personal') {
+          this.notes = all.filter(n => !n.project_slug || n.project_slug === 'pessoal');
+        } else {
+          this.notes = all.filter(n => n.project_slug && n.project_slug !== 'pessoal');
+        }
+      } else {
+        this.notes = all;
+      }
     },
 
     get filteredNotes() {
