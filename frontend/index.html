@@ -843,6 +843,9 @@
                 </template>
               </div>
             </div>
+            <button @click.stop="discardInboxTask(task)"
+              class="ml-1.5 text-slate-600 hover:text-red-400 transition-colors text-base leading-none px-1"
+              title="Apagar">×</button>
           </div>
         </template>
       </div>
@@ -3324,6 +3327,17 @@ function pedroOS() {
       this.showToast(`🗑 #${task.short_id} excluída`);
     },
 
+    discardInboxTask(task) {
+      const snap = [...this.inbox];
+      this.inbox = this.inbox.filter(t => t.id !== task.id);
+      this.updateTitle();
+      this.showToast(`🗑 #${task.short_id} apagada`, () => {
+        this.inbox = snap;
+        this.updateTitle();
+      });
+      fetch(`${API}/api/tasks/${task.id}`, { method: 'DELETE' });
+    },
+
     async addChecklistItem() {
       if (!this.modal.newChecklistText.trim()) return;
       const item = await this.api(`/api/tasks/${this.modal.task.id}/checklist`, 'POST', {
@@ -4281,5 +4295,266 @@ function inboxCard(task) {
     <span class="mob-nav-label" :style="mobTab === 'notes' ? 'color:var(--accent)' : 'color:#4A6080'">Notas</span>
   </button>
 </nav>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+  FOCUS PANEL — Modo Foco coaching com IA
+  Toggle: botão 🎯 no canto inferior direito (desktop) ou via /foco no WhatsApp
+  ═══════════════════════════════════════════════════════════════════════════ -->
+<div x-data="focusPanel()" x-init="init()" class="mob-hide">
+
+  <!-- Botão flutuante -->
+  <button x-show="!open" @click="openPanel()"
+    class="fixed bottom-6 right-6 z-50 w-13 h-13 rounded-full text-xl shadow-xl transition-all hover:scale-110 focus:outline-none"
+    style="width:52px;height:52px;background:linear-gradient(135deg,#7C3AED,#4F46E5);border:1px solid rgba(167,139,250,0.3)"
+    title="Modo Foco">
+    🎯
+  </button>
+
+  <!-- Painel lateral -->
+  <div x-show="open" x-cloak
+    class="fixed right-0 top-0 h-full z-50 flex flex-col shadow-2xl"
+    style="width:400px;background:var(--bg);border-left:1px solid var(--border2)">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-4 py-3 shrink-0" style="border-bottom:1px solid var(--border)">
+      <div class="flex items-center gap-2">
+        <span class="text-lg">🎯</span>
+        <span class="font-semibold text-sm text-white">Modo Foco</span>
+        <span x-show="sessionId && !complete" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      </div>
+      <div class="flex items-center gap-1">
+        <button @click="showHistory = !showHistory; if(showHistory) loadHistory()"
+          class="p-1.5 rounded-lg text-xs transition-colors"
+          :class="showHistory ? 'text-violet-400' : 'text-slate-500 hover:text-slate-300'"
+          title="Histórico">⏱</button>
+        <button @click="closePanel()"
+          class="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 transition-colors text-lg leading-none">×</button>
+      </div>
+    </div>
+
+    <!-- Histórico -->
+    <div x-show="showHistory && !sessionId" class="flex-1 overflow-y-auto p-4 space-y-2">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sessões anteriores</span>
+        <button @click="showHistory = false" class="text-xs text-violet-400 hover:text-violet-300">Voltar</button>
+      </div>
+      <template x-for="h in history" :key="h.id">
+        <div class="rounded-lg p-3" style="background:var(--card);border:1px solid var(--border)">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs text-slate-500" x-text="fmtDate(h.started_at)"></span>
+            <span class="text-xs px-2 py-0.5 rounded-full"
+              :class="h.status === 'completed' ? 'bg-emerald-900/40 text-emerald-400' : 'text-slate-500'"
+              x-text="h.status === 'completed' ? '✅ concluída' : '❌ ' + h.status"></span>
+          </div>
+          <p x-show="h.outcome_summary" class="text-sm text-slate-300" x-text="h.outcome_summary"></p>
+          <p x-show="h.duration_seconds" class="text-xs text-slate-600 mt-1" x-text="'⏱ ' + Math.round(h.duration_seconds/60) + 'min'"></p>
+        </div>
+      </template>
+      <p x-show="history.length === 0" class="text-sm text-slate-600 text-center py-8">Nenhuma sessão ainda.</p>
+    </div>
+
+    <!-- Empty state -->
+    <div x-show="!sessionId && !showHistory" class="flex-1 flex flex-col items-center justify-center text-center p-8">
+      <span class="text-5xl mb-4">🧘</span>
+      <h3 class="text-white font-semibold mb-2">Travado? Sem saber o que fazer?</h3>
+      <p class="text-sm text-slate-500 mb-6 max-w-[260px] leading-relaxed">
+        Vou analisar suas tarefas e te ajudar a ganhar clareza com algumas perguntas.
+      </p>
+      <button @click="startSession()" :disabled="loading"
+        class="px-5 py-2.5 rounded-xl font-semibold text-sm transition-all hover:brightness-110 disabled:opacity-50"
+        style="background:linear-gradient(135deg,#7C3AED,#4F46E5);color:white">
+        <span x-show="!loading">🎯 Iniciar Sessão de Foco</span>
+        <span x-show="loading">⏳ Iniciando…</span>
+      </button>
+    </div>
+
+    <!-- Chat -->
+    <div x-show="sessionId" class="flex-1 overflow-y-auto p-4 space-y-4" x-ref="chatArea">
+      <template x-for="(msg, idx) in messages" :key="idx">
+        <div>
+          <!-- Mensagem da IA -->
+          <div x-show="msg.role === 'assistant'" class="space-y-2">
+            <div class="rounded-2xl rounded-tl-sm px-4 py-3 max-w-[92%] text-sm leading-relaxed"
+              style="background:var(--card);border:1px solid var(--border);color:#E2E8F0"
+              x-text="msg.content.message || msg.content"></div>
+
+            <!-- Resumo final -->
+            <div x-show="msg.content.summary" class="text-xs text-violet-400 italic ml-2"
+              x-text="'📋 ' + msg.content.summary"></div>
+
+            <!-- Opções (só na última mensagem ativa) -->
+            <div x-show="idx === messages.length - 1 && !complete && !loading"
+              class="flex flex-wrap gap-1.5 ml-1">
+              <template x-for="(opt, oi) in (msg.content.options || [])" :key="oi">
+                <button @click="selectOption(opt)"
+                  class="text-xs px-3 py-1.5 rounded-full border transition-all hover:brightness-110"
+                  :class="opt.includes('✏️') ? 'text-slate-400 border-slate-600 hover:border-slate-500' :
+                          opt.includes('✅') || opt.includes('🚀') ? 'text-emerald-400 border-emerald-700/50 hover:bg-emerald-900/20' :
+                          'text-violet-300 border-violet-700/50 hover:bg-violet-900/20'"
+                  x-text="opt"></button>
+              </template>
+            </div>
+          </div>
+
+          <!-- Mensagem do usuário -->
+          <div x-show="msg.role === 'user'" class="flex justify-end">
+            <div class="rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%] text-sm"
+              style="background:rgba(109,40,217,0.2);border:1px solid rgba(109,40,217,0.3);color:#C4B5FD"
+              x-text="msg.content"></div>
+          </div>
+        </div>
+      </template>
+
+      <div x-show="loading" class="flex items-center gap-2 text-slate-500 text-sm">
+        <span class="animate-pulse">●</span>
+        <span class="animate-pulse" style="animation-delay:0.2s">●</span>
+        <span class="animate-pulse" style="animation-delay:0.4s">●</span>
+      </div>
+    </div>
+
+    <!-- Área de input livre -->
+    <div x-show="sessionId && showInput" class="px-4 pb-3 shrink-0" style="border-top:1px solid var(--border)">
+      <div class="flex gap-2 mt-3">
+        <input x-ref="customInput" x-model="customText"
+          @keydown.enter="sendCustom()"
+          @keydown.escape="showInput = false"
+          type="text" placeholder="Escreva sua resposta…"
+          class="flex-1 px-3 py-2 text-sm rounded-lg"
+          style="background:var(--surface);border:1px solid var(--border2);color:white" />
+        <button @click="sendCustom()" :disabled="!customText.trim() || loading"
+          class="px-3 py-2 rounded-lg text-sm font-semibold disabled:opacity-40 transition"
+          style="background:rgba(109,40,217,0.3);border:1px solid rgba(109,40,217,0.4);color:#C4B5FD">↵</button>
+      </div>
+      <button @click="showInput = false" class="text-xs text-slate-600 hover:text-slate-400 mt-1.5 transition">← Voltar às opções</button>
+    </div>
+
+    <!-- Controles rodapé -->
+    <div x-show="sessionId" class="px-4 py-2 flex items-center justify-between shrink-0" style="border-top:1px solid var(--border)">
+      <div x-show="!complete">
+        <button @click="abandonSession()" class="text-xs text-slate-600 hover:text-red-400 transition">Encerrar sessão</button>
+      </div>
+      <div x-show="complete" class="w-full text-center">
+        <p class="text-emerald-400 text-xs mb-2">✅ Sessão concluída</p>
+        <button @click="sessionId = null; complete = false; messages = []; startSession()"
+          class="text-xs px-4 py-1.5 rounded-lg transition"
+          style="background:rgba(109,40,217,0.2);border:1px solid rgba(109,40,217,0.3);color:#C4B5FD">🔄 Nova sessão</button>
+      </div>
+      <button x-show="!complete && !showInput" @click="showInput = true; $nextTick(() => $refs.customInput?.focus())"
+        class="text-xs text-violet-400 hover:text-violet-300 transition">✏️ Escrever livre</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function focusPanel() {
+  return {
+    open: false,
+    sessionId: null,
+    messages: [],
+    loading: false,
+    complete: false,
+    showInput: false,
+    customText: '',
+    showHistory: false,
+    history: [],
+
+    init() {},
+
+    openPanel() {
+      this.open = true;
+      this.showHistory = false;
+    },
+
+    closePanel() {
+      this.open = false;
+    },
+
+    async startSession() {
+      this.loading = true;
+      this.messages = [];
+      this.complete = false;
+      this.showHistory = false;
+      try {
+        const res = await fetch('/api/ai/focus/start', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({source: 'dashboard'}),
+        });
+        const data = await res.json();
+        this.sessionId = data.session_id;
+        this.messages.push({role: 'assistant', content: data.response});
+        this.$nextTick(() => this.scrollBottom());
+      } catch(e) { console.error(e); }
+      finally { this.loading = false; }
+    },
+
+    async selectOption(opt) {
+      if (opt.includes('✏️')) {
+        this.showInput = true;
+        await this.$nextTick();
+        this.$refs.customInput?.focus();
+        return;
+      }
+      await this.sendResponse(opt);
+    },
+
+    async sendCustom() {
+      if (!this.customText.trim()) return;
+      const txt = this.customText.trim();
+      this.customText = '';
+      this.showInput = false;
+      await this.sendResponse(txt);
+    },
+
+    async sendResponse(text) {
+      if (this.loading || !this.sessionId) return;
+      this.messages.push({role: 'user', content: text});
+      this.loading = true;
+      this.$nextTick(() => this.scrollBottom());
+      try {
+        const res = await fetch('/api/ai/focus/respond', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({session_id: this.sessionId, response: text}),
+        });
+        const data = await res.json();
+        this.messages.push({role: 'assistant', content: data.response});
+        if (data.is_complete) this.complete = true;
+        this.$nextTick(() => this.scrollBottom());
+      } catch(e) { console.error(e); }
+      finally { this.loading = false; }
+    },
+
+    async abandonSession() {
+      if (this.sessionId) {
+        fetch(`/api/ai/focus/abandon/${this.sessionId}`, {method: 'POST'});
+      }
+      this.sessionId = null;
+      this.messages = [];
+      this.complete = false;
+    },
+
+    async loadHistory() {
+      try {
+        const res = await fetch('/api/ai/focus/history?limit=10');
+        this.history = await res.json();
+      } catch(e) {}
+    },
+
+    scrollBottom() {
+      const el = this.$refs.chatArea;
+      if (el) el.scrollTop = el.scrollHeight;
+    },
+
+    fmtDate(iso) {
+      if (!iso) return '';
+      try {
+        return new Date(iso).toLocaleDateString('pt-BR', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+      } catch(e) { return iso; }
+    },
+  };
+}
+</script>
+
 </body>
 </html>

@@ -30,6 +30,7 @@ async def lifespan(app: FastAPI):
     from app.features.notes.models import Note  # noqa: F401
     from app.features.habits.models import Habit, HabitLog, DayScore, PersonalRecord  # noqa: F401
     from app.features.shopping.models import ShoppingItem  # noqa: F401
+    from app.features.ai.models import FocusSession, BrainDump, AIMemory, CheckIn, DailyReview  # noqa: F401
 
     os.makedirs("data", exist_ok=True)
 
@@ -129,6 +130,7 @@ from app.features.integrations.router import router as integrations_router
 from app.features.notes.router import router as notes_router
 from app.features.habits.router import router as habits_router
 from app.features.shopping.router import router as shopping_router
+from app.features.ai.router import router as ai_router
 
 app.include_router(tasks_router)
 app.include_router(checklist_router)
@@ -141,6 +143,7 @@ app.include_router(integrations_router)
 app.include_router(notes_router)
 app.include_router(habits_router)
 app.include_router(shopping_router)
+app.include_router(ai_router)
 
 
 UPLOADS_DIR = os.environ.get("UPLOADS_DIR") or os.path.join(os.path.dirname(__file__), "..", "data", "uploads")

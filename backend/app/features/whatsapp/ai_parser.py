@@ -177,6 +177,12 @@ Extraia da mensagem:
 - deadline: YYYY-MM-DD ou null. Interprete "sexta", "amanhã", "semana que vem", "dia 15", "fim de semana", "hoje"
 - priority: "p1" se urgente/hoje/ASAP, "p2" se essa semana/importante, "p3" padrão, "backlog" se sem pressa
 
+RETORNE {{"error": "unclear"}} quando a mensagem for:
+- uma pergunta (ex: "como faço X?", "o que é Y?")
+- uma saudação ou teste ("teste", "oi", "olá", "ok", "sim", "não")
+- conversação sem tarefa implícita
+- texto muito curto ou ambíguo sem ação clara
+
 Se não conseguir extrair um título sensato, retorne {{"error": "unclear"}}.
 Responda APENAS JSON, sem markdown."""
 

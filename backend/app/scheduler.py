@@ -386,6 +386,39 @@ async def _run_scheduler():
             # Lembretes de tarefas — verifica a cada ciclo (30s)
             await _check_task_reminders(send_whatsapp, target_jid)
 
+            # Check-in inteligente — a cada 30min durante horário de trabalho
+            # (o engine decide se envia ou não)
+            if 9 <= h < 18 and not (12 <= h < 13):
+                try:
+                    from app.features.ai.checkin_engine import should_checkin, generate_checkin
+                    from app.db import AsyncSessionLocal as _CheckinSession
+                    async with _CheckinSession() as ci_db:
+                        check = await should_checkin(ci_db)
+                        if check.get("should"):
+                            triggers = check.get("triggers", ["manual"])
+                            result = await generate_checkin(ci_db, trigger=triggers[0])
+                            if "message" in result and not result.get("error"):
+                                msg = result["message"] + "\n\n"
+                                for i, opt in enumerate(result.get("options", []), 1):
+                                    msg += f"{i}️⃣ {opt}\n"
+                                await send_whatsapp(target_jid, msg)
+                                logger.info("[scheduler] check-in enviado: %s", triggers[0])
+                except Exception as ci_exc:
+                    logger.error(f"[scheduler] erro no check-in: {ci_exc}")
+
+            # Análise de padrões — toda segunda às 03:00 (silencioso)
+            key_patterns = f"patterns_{today}"
+            if now.weekday() == 0 and h == 3 and m == 0 and key_patterns not in sent:
+                try:
+                    from app.features.ai.memory_engine import analyze_patterns
+                    from app.db import AsyncSessionLocal as _MemSession
+                    async with _MemSession() as mem_db:
+                        await analyze_patterns(mem_db)
+                    sent.add(key_patterns)
+                    logger.info("[scheduler] análise de padrões executada")
+                except Exception as mp_exc:
+                    logger.error(f"[scheduler] erro na análise de padrões: {mp_exc}")
+
             # Limpa chaves antigas
             sent = {k for k in sent if today in k}
 

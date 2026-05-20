@@ -34,6 +34,11 @@ _DUMP_TAGS = {
 
 router = APIRouter(prefix="/api/whatsapp", tags=["whatsapp"])
 
+# ── Estado in-memory para sessões /foco e /dump (single-user, ok perder no restart) ──
+_wa_focus: dict[str, int] = {}        # jid -> session_id
+_wa_dump_texts: dict[str, list] = {}  # jid -> lista de textos acumulados
+_wa_dump_pending: dict[str, int] = {} # jid -> dump_id aguardando confirmação
+
 _MONTHS_PT = {
     "jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
     "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12,
@@ -218,7 +223,7 @@ async def whatsapp_webhook(payload: dict, db: AsyncSession = Depends(get_db)):
         return {"ok": True, "response": response_text}
 
     # ── comprar: cria itens na lista de compras ──────────────────────────
-    if text.lower().startswith("comprar:") or text.lower().startswith("compras:"):
+    if text.lower().startswith("comprar:") or text.lower().startswith("compras:") or text.lower().startswith("compra:"):
         items_text = text.split(":", 1)[1].strip()
         items_list = [i.strip() for i in items_text.split(",") if i.strip()]
         if items_list:
@@ -288,6 +293,165 @@ async def whatsapp_webhook(payload: dict, db: AsyncSession = Depends(get_db)):
         if from_jid:
             await send_whatsapp(from_jid, response_text)
         return {"ok": True, "response": response_text}
+
+    # ── /foco: sessão de coaching ───────────────────────────────────────────
+    if text.strip().lower() == "/foco":
+        from app.features.ai.focus_engine import start_focus
+        result = await start_focus(db, source="whatsapp")
+        if from_jid:
+            _wa_focus[from_jid] = result["session_id"]
+        r = result["response"]
+        msg = f"🎯 *Modo Foco ativado*\n\n{r['message']}\n\n"
+        for i, opt in enumerate(r.get("options", []), 1):
+            msg += f"{i}️⃣ {opt}\n"
+        msg += "\n_Responda com o número ou escreva livremente._"
+        if from_jid:
+            await send_whatsapp(from_jid, msg)
+        return {"ok": True, "response": msg}
+
+    # Continuar sessão de foco ativa
+    if from_jid and from_jid in _wa_focus:
+        t_lower = text.strip().lower()
+        if t_lower in ("encerrar", "sair", "cancelar", "cancel", "esc"):
+            from app.features.ai.focus_engine import close_focus
+            await close_focus(db, _wa_focus[from_jid], status="abandoned")
+            del _wa_focus[from_jid]
+            response_text = "Ok, sessão de foco encerrada."
+            if from_jid:
+                await send_whatsapp(from_jid, response_text)
+            return {"ok": True, "response": response_text}
+
+        from app.features.ai.focus_engine import respond_focus, get_focus_history
+        from sqlalchemy import select as _sel
+        from app.features.ai.models import FocusSession as _FS
+        session_id = _wa_focus[from_jid]
+
+        # Resolver número → texto da opção
+        user_response = text.strip()
+        if user_response.isdigit():
+            idx = int(user_response) - 1
+            res_fs = await db.execute(_sel(_FS).where(_FS.id == session_id))
+            fs = res_fs.scalar_one_or_none()
+            if fs:
+                import json as _json
+                msgs = _json.loads(fs.messages or "[]")
+                for m in reversed(msgs):
+                    if m["role"] == "assistant" and isinstance(m["content"], dict):
+                        opts = m["content"].get("options", [])
+                        if 0 <= idx < len(opts):
+                            user_response = opts[idx]
+                        break
+
+        result = await respond_focus(db, session_id, user_response)
+        r = result["response"]
+
+        if result.get("is_complete"):
+            del _wa_focus[from_jid]
+            msg = f"✅ *Decisão tomada!*\n\n{r['message']}"
+            if r.get("summary"):
+                msg += f"\n\n📋 _{r['summary']}_\n\nBora! 🚀"
+        else:
+            msg = f"{r['message']}\n\n"
+            for i, opt in enumerate(r.get("options", []), 1):
+                msg += f"{i}️⃣ {opt}\n"
+            msg += "\n_Número ou texto livre._"
+
+        if from_jid:
+            await send_whatsapp(from_jid, msg)
+        return {"ok": True, "response": msg}
+
+    # ── /dump: brain dump interativo ─────────────────────────────────────────
+    if text.strip().lower() == "/dump":
+        if from_jid:
+            _wa_dump_texts[from_jid] = []
+        msg = (
+            "🧠 *Brain Dump ativado*\n\n"
+            "Manda tudo que tá na sua cabeça — bagunçado, várias mensagens, tudo bem.\n\n"
+            "Quando terminar, manda *pronto*."
+        )
+        if from_jid:
+            await send_whatsapp(from_jid, msg)
+        return {"ok": True, "response": msg}
+
+    # Dump aguardando confirmação
+    if from_jid and from_jid in _wa_dump_pending:
+        dump_id = _wa_dump_pending[from_jid]
+        t_lower = text.strip().lower()
+        del _wa_dump_pending[from_jid]
+
+        if t_lower in ("sim", "s", "yes", "bora", "confirma", "1"):
+            from app.features.ai.dump_engine import confirm_dump
+            result = await confirm_dump(db, dump_id)
+            created = result.get("tasks_created", 0)
+            updated = result.get("tasks_updated", 0)
+            msg = f"✅ Feito!\n• {created} tarefa(s) criada(s)\n• {updated} tarefa(s) atualizada(s)"
+        else:
+            msg = "Ok, descartei. Manda */dump* quando quiser tentar de novo."
+
+        if from_jid:
+            await send_whatsapp(from_jid, msg)
+        return {"ok": True, "response": msg}
+
+    # Coletando textos do dump
+    if from_jid and from_jid in _wa_dump_texts:
+        t_lower = text.strip().lower()
+        if t_lower in ("pronto", "ok", "fim", "done", "feito"):
+            full_text = "\n".join(_wa_dump_texts[from_jid])
+            del _wa_dump_texts[from_jid]
+
+            if not full_text.strip():
+                msg = "Nenhum texto coletado. Dump cancelado."
+                if from_jid:
+                    await send_whatsapp(from_jid, msg)
+                return {"ok": True, "response": msg}
+
+            from app.features.ai.dump_engine import process_dump
+            result = await process_dump(db, raw_text=full_text, source="whatsapp")
+
+            if result.get("status") == "error":
+                msg = f"❌ Erro ao processar: {result.get('error', '?')}"
+                if from_jid:
+                    await send_whatsapp(from_jid, msg)
+                return {"ok": True, "response": msg}
+
+            parsed = result["parsed"]
+            items = parsed.get("items", [])
+            _ITEM_ICONS = {"task": "📌", "note": "📝", "reminder": "⏰", "idea": "💡"}
+            _ACTION_LABELS = {"create_task": "→ criar", "update_task": "→ atualizar", "just_note": "→ anotar"}
+
+            msg = "📋 *Organizei seu dump:*\n\n"
+            for item in items:
+                icon = _ITEM_ICONS.get(item.get("type"), "•")
+                label = _ACTION_LABELS.get(item.get("action"), "")
+                msg += f"{icon} *{item.get('title', item.get('original_text', '')[:50])}*"
+                if item.get("related_task_title"):
+                    msg += f"\n   🔗 _{item['related_task_title']}_"
+                if label:
+                    msg += f"\n   {label}"
+                msg += "\n\n"
+
+            if parsed.get("immediate_actions"):
+                msg += "⚡ *Ações imediatas (2min):*\n"
+                for action in parsed["immediate_actions"]:
+                    msg += f"  · {action}\n"
+                msg += "\n"
+
+            msg += "_Adiciono tudo ao board? Responda *sim* ou *não*_"
+
+            if from_jid:
+                _wa_dump_pending[from_jid] = result["dump_id"]
+                await send_whatsapp(from_jid, msg)
+            return {"ok": True, "response": msg}
+
+        elif t_lower in ("cancelar", "cancel", "sair"):
+            del _wa_dump_texts[from_jid]
+            msg = "Dump cancelado."
+            if from_jid:
+                await send_whatsapp(from_jid, msg)
+            return {"ok": True, "response": msg}
+        else:
+            _wa_dump_texts[from_jid].append(text)
+            return {"ok": True, "response": "..."}
 
     is_command, response_text = await handle_command(text, db, projects)
 
