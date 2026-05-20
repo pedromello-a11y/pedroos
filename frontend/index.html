@@ -207,15 +207,34 @@
       margin-bottom: 1px;
     }
     .task-row-doing {
-      background: rgba(16,185,129,0.05) !important;
-      border-left: 3px solid #10B981 !important;
+      background: rgba(16,185,129,0.025) !important;
+      border-left: 2px solid rgba(16,185,129,0.55) !important;
     }
     .status-chip-doing {
       color: #10B981;
-      border-color: #10B981;
-      background: rgba(16,185,129,0.15);
-      box-shadow: 0 0 8px rgba(16,185,129,0.30);
+      border-color: rgba(16,185,129,0.35);
+      background: rgba(16,185,129,0.06);
     }
+    /* Chip dimmed por padrão dentro de uma row agrupada (já tem section header dizendo o status) */
+    .task-row .status-chip {
+      opacity: 0.45;
+      min-width: 56px;
+      font-size: 8px;
+      padding: 1px 5px;
+      border-width: 1px;
+    }
+    .task-row:hover .status-chip { opacity: 1; }
+    .task-row .status-chip:hover { opacity: 1; }
+    /* Subtask: indent + dim + menor */
+    .task-row-sub {
+      margin-left: 24px;
+      background: transparent !important;
+      border-color: var(--border) !important;
+      padding-top: 6px !important;
+      padding-bottom: 6px !important;
+      opacity: 0.85;
+    }
+    .task-row-sub:hover { opacity: 1; }
     .task-row-todo {
       /* aguardando = neutro, não alarme */
     }
@@ -937,13 +956,11 @@
 
     <!-- TASK DUMP -->
     <section x-show="activeView === 'tasks' && (!isMobile || mobTab === 'tasks')">
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2">
           <span class="section-label">Todas as tarefas</span>
         </div>
         <div class="flex items-center gap-3">
-          <span class="badge" :class="context === 'personal' ? 'ctx-ps' : 'ctx-hm'"
-            x-text="context === 'personal' ? 'Pessoal' : 'Hotmart'"></span>
           <button @click="_sortMode = _sortMode === 'deadline' ? 'default' : 'deadline'"
             class="text-[10px] font-bold uppercase tracking-wider transition-colors"
             :class="_sortMode === 'deadline' ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'"
@@ -957,8 +974,32 @@
         </div>
       </div>
 
+      <!-- Project filter chips (só Hotmart) -->
+      <div x-show="context === 'hotmart' && workProjects.length > 0"
+        class="flex items-center gap-1.5 mb-4 overflow-x-auto pb-1" style="scrollbar-width:thin">
+        <button @click="filterProject = null"
+          class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full whitespace-nowrap transition-all shrink-0"
+          :class="!filterProject ? 'text-white' : 'text-slate-500 hover:text-slate-300'"
+          :style="!filterProject ? 'background:rgba(255,255,255,0.06);border:1px solid var(--border2)' : 'background:transparent;border:1px solid var(--border)'">
+          Todos
+          <span class="ml-1 font-mono opacity-60" x-text="flatTasksAllProjects.length"></span>
+        </button>
+        <template x-for="p in workProjects" :key="p.slug">
+          <button @click="filterProject = (filterProject === p.slug ? null : p.slug)"
+            class="text-[10px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap transition-all shrink-0"
+            :class="filterProject === p.slug ? '' : 'opacity-55 hover:opacity-90'"
+            :style="filterProject === p.slug
+              ? projectTagStyle(p.slug)
+              : ('background:transparent;border:1px solid var(--border);color:' + (p.color || '#94a3b8'))">
+            <span x-text="p.name"></span>
+            <span class="ml-1 font-mono opacity-70" x-text="taskCountByProject(p.slug)"></span>
+          </button>
+        </template>
+      </div>
+
       <div x-show="flatTasks.length === 0" class="text-center py-16 text-slate-600 text-sm">
-        Nenhuma tarefa em <span x-text="context === 'personal' ? 'Pessoal' : 'Hotmart'"></span> ainda.
+        <span x-show="!filterProject">Nenhuma tarefa em <span x-text="context === 'personal' ? 'Pessoal' : 'Hotmart'"></span> ainda.</span>
+        <span x-show="filterProject">Nada em <span class="font-bold" x-text="projects.find(p=>p.slug===filterProject)?.name"></span> por enquanto.</span>
       </div>
 
       <div class="flex flex-col gap-4">
@@ -1068,7 +1109,7 @@
             <template x-if="subtasksByParent[task.id]?.length">
               <div class="flex flex-col gap-1 mt-1">
                 <template x-for="sub in subtasksByParent[task.id]" :key="sub.id">
-                  <div @click="openModal(sub)" class="task-row"
+                  <div @click="openModal(sub)" class="task-row task-row-sub"
                     :class="[sub.status === 'doing' ? 'task-row-doing' : sub.status === 'todo' ? 'task-row-todo' : sub.status === 'queued' ? 'task-row-queued' : sub.status === 'backlog' ? 'task-row-backlog' : '', _blDragOver === sub.id ? 'bl-drag-over' : '']"
                     :style="['doing','todo','queued'].includes(sub.status) ? '' : 'border-left:2px solid var(--border2)'"
                     draggable="true"
@@ -2550,6 +2591,7 @@ function pedroOS() {
     jiraBaseUrl: 'https://hotmart.atlassian.net',
     showQR: false, qrDataUrl: null,
     quickTitle: '',
+    filterProject: null,
     _pendingJiraKey: null,
     toasts: [],
     todayStr: new Date().toISOString().split('T')[0],
@@ -2966,8 +3008,23 @@ function pedroOS() {
       return filtered;
     },
 
+    get flatTasksAllProjects() {
+      return this.allTasks.filter(t => !t.parent_id && this.taskMatchesContext(t));
+    },
+
+    get workProjects() {
+      return this.projects.filter(p => p.slug !== 'pessoal');
+    },
+
+    taskCountByProject(slug) {
+      return this.flatTasksAllProjects.filter(t => t.project_slug === slug).length;
+    },
+
     get flatTasks() {
-      const tasks = this.allTasks.filter(t => !t.parent_id && this.taskMatchesContext(t));
+      let tasks = this.flatTasksAllProjects;
+      if (this.filterProject) {
+        tasks = tasks.filter(t => t.project_slug === this.filterProject);
+      }
       const prio = { p1: 0, p2: 1, p3: 2, backlog: 3 };
       if (this._sortMode === 'deadline') {
         return [...tasks].sort((a, b) => {
