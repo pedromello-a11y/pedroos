@@ -497,9 +497,152 @@
         .mob-bottom-nav { padding-bottom: env(safe-area-inset-bottom); height: calc(64px + env(safe-area-inset-bottom)); }
       }
     }
+
+    /* ═══ MOMENTUM VISUAL ═════════════════════════════════════════════════ */
+    .energy-bar {
+      height: 6px;
+      border-radius: 99px;
+      background: var(--border);
+      overflow: hidden;
+      position: relative;
+    }
+    .energy-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1), background 0.6s ease;
+    }
+    .energy-cold .energy-bar-fill { background: linear-gradient(90deg, #1e3a5f, #3b82f6); }
+    .energy-warm .energy-bar-fill { background: linear-gradient(90deg, #065f46, #10b981); }
+    .energy-hot .energy-bar-fill {
+      background: linear-gradient(90deg, #92400e, #f59e0b);
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+    }
+    .energy-fire .energy-bar-fill {
+      background: linear-gradient(90deg, #dc2626, #f97316, #fbbf24);
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+      animation: fire-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes fire-pulse {
+      0%, 100% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 24px rgba(249, 115, 22, 0.7); }
+    }
+    .frenzy-glow { animation: frenzy-bg 2s ease-in-out infinite; }
+    @keyframes frenzy-bg {
+      0%, 100% { background: rgba(239, 68, 68, 0.03); }
+      50% { background: rgba(249, 115, 22, 0.06); }
+    }
+    .streak-flame {
+      display: inline-block;
+      animation: flame-flicker 0.8s ease-in-out infinite alternate;
+    }
+    .streak-flame:nth-child(2) { animation-delay: 0.1s; }
+    .streak-flame:nth-child(3) { animation-delay: 0.2s; }
+    .streak-flame:nth-child(4) { animation-delay: 0.3s; }
+    .streak-flame:nth-child(5) { animation-delay: 0.4s; }
+    @keyframes flame-flicker {
+      from { transform: translateY(0) scale(1); opacity: 0.8; }
+      to { transform: translateY(-2px) scale(1.1); opacity: 1; }
+    }
+    .week-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+    }
+    .week-dot-good { background: #10b981; box-shadow: 0 0 6px rgba(16,185,129,0.5); }
+    .week-dot-neutral { background: #eab308; }
+    .week-dot-bad { background: #ef4444; opacity: 0.6; }
+    .week-dot-empty { background: var(--border); }
+    .week-dot-today { box-shadow: 0 0 0 2px rgba(255,255,255,0.2); }
+    .habit-ring {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.3s ease;
+      flex-shrink: 0;
+    }
+    .habit-ring-done {
+      background: rgba(16, 185, 129, 0.15);
+      border: 2.5px solid #10b981;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+    }
+    .habit-ring-pending {
+      background: transparent;
+      border: 2.5px solid var(--border2);
+    }
+    .habit-ring-pending:hover { border-color: #4b5563; background: rgba(255,255,255,0.02); }
+    .record-flash { animation: record-glow 2s ease-out forwards; }
+    @keyframes record-glow {
+      0% { background: rgba(251,191,36,0.2); border-color: rgba(251,191,36,0.5); }
+      70% { background: rgba(251,191,36,0.08); border-color: rgba(251,191,36,0.3); }
+      100% { background: transparent; border-color: var(--border); }
+    }
+    .combo-track { display: flex; gap: 3px; align-items: center; }
+    .combo-dot {
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+    }
+    .combo-dot-active { width: 6px; height: 6px; }
+    .combo-dot-frenzy { width: 8px; height: 8px; animation: fire-pulse 1s ease-in-out infinite; }
+    .done-toast { animation: toast-in 0.3s ease, toast-out 0.3s ease 2.5s forwards; }
+    @keyframes toast-in {
+      from { transform: translateY(20px) scale(0.9); opacity: 0; }
+      to { transform: translateY(0) scale(1); opacity: 1; }
+    }
+    @keyframes toast-out { to { transform: translateY(-10px); opacity: 0; } }
+    .habit-streak-fire {
+      font-size: 10px; opacity: 0.7;
+      animation: mini-flame 1s ease-in-out infinite alternate;
+    }
+    @keyframes mini-flame {
+      from { transform: translateY(0); }
+      to { transform: translateY(-1px); }
+    }
+    .frenzy-shimmer { position: relative; overflow: hidden; }
+    .frenzy-shimmer::after {
+      content: '';
+      position: absolute; inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.03) 55%, transparent 60%);
+      animation: shimmer 3s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
   </style>
 </head>
 <body class="text-slate-200 font-sans min-h-screen" x-data="pedroOS()" x-init="init()" x-cloak>
+
+<!-- ── COMBO TOAST ──────────────────────────────────────────────────────────── -->
+<div x-show="comboToast" x-cloak
+  class="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+  <div class="done-toast rounded-2xl px-5 py-3 flex items-center gap-3 shadow-2xl"
+    :class="comboToast?.isFrenzy ? 'frenzy-shimmer' : ''"
+    :style="comboToast?.isFrenzy
+      ? 'background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);backdrop-filter:blur(8px)'
+      : 'background:var(--card);border:1px solid var(--border2);backdrop-filter:blur(8px)'">
+    <div class="combo-track">
+      <template x-for="(dot, i) in comboDots()" :key="'toast'+i">
+        <div class="combo-dot"
+          :class="{ 'combo-dot-active': dot.active, 'combo-dot-frenzy': dot.isFrenzy }"
+          :style="dot.active ? 'background:' + dot.color : 'background:var(--border)'"></div>
+      </template>
+    </div>
+    <span class="text-sm font-bold"
+      :class="{
+        'text-blue-400': (comboToast?.position || 0) <= 2,
+        'text-emerald-400': (comboToast?.position || 0) > 2 && (comboToast?.position || 0) <= 4,
+        'text-amber-400': (comboToast?.position || 0) > 4 && (comboToast?.position || 0) <= 6,
+        'text-red-400': (comboToast?.position || 0) >= 7,
+      }"
+      x-text="comboToast?.isFrenzy ? '🔥 FRENZY!' : '×' + (comboToast?.multiplier || 1).toFixed(1)"></span>
+    <span x-show="!comboToast?.isFrenzy && (momentum.combo?.until_frenzy || 0) <= 3 && (momentum.combo?.until_frenzy || 0) > 0"
+      class="text-[10px] text-slate-500"
+      x-text="'+' + momentum.combo?.until_frenzy + ' 🔥'"></span>
+  </div>
+</div>
 
 <!-- ── TOASTS ─────────────────────────────────────────────────────────────── -->
 <div class="fixed bottom-5 right-5 z-50 flex flex-col gap-2" style="min-width:280px">
@@ -1099,16 +1242,29 @@
     <section x-show="isMobile && mobTab === 'shopping'" x-cloak class="py-2">
 
       <!-- Momentum mini -->
-      <div x-show="context === 'personal'" class="mob-momentum mb-4">
-        <div class="mob-momentum-card">
-          <p class="text-2xl font-bold text-white" x-text="momentum.streak">0</p>
-          <p class="text-[10px] text-slate-500 font-bold">🔥 STREAK</p>
+      <div x-show="context === 'personal'" class="mb-4 rounded-2xl p-3"
+        :class="{ 'frenzy-glow': momentum.combo?.is_frenzy }"
+        style="background:var(--card);border:1px solid var(--border)">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-1">
+            <template x-for="(f, i) in streakFlames().split('')" :key="i">
+              <span class="streak-flame text-base leading-none" x-text="f"></span>
+            </template>
+            <span x-show="momentum.streak > 0" class="text-lg font-black text-white ml-1" x-text="momentum.streak"></span>
+            <span x-show="momentum.streak > 0" class="text-[9px] text-slate-500 font-bold ml-1">dias</span>
+          </div>
+          <div x-show="momentum.combo?.is_frenzy"
+            class="text-xs font-black text-red-400 uppercase tracking-wider px-2 py-0.5 rounded-full"
+            style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3)">Frenzy</div>
         </div>
-        <div class="mob-momentum-card">
-          <p class="text-2xl font-bold font-mono"
-            :class="momentum.total_points >= 0 ? 'text-emerald-400' : 'text-red-400'"
-            x-text="momentum.total_points">0</p>
-          <p class="text-[10px] text-slate-500 font-bold">💰 PONTOS</p>
+        <div class="energy-bar"
+          :class="{
+            'energy-cold': energyLevel() === 'cold',
+            'energy-warm': energyLevel() === 'warm',
+            'energy-hot': energyLevel() === 'hot',
+            'energy-fire': energyLevel() === 'fire',
+          }">
+          <div class="energy-bar-fill" :style="'width:' + energyWidth()"></div>
         </div>
       </div>
 
@@ -1405,58 +1561,87 @@
     </div>
 
     <!-- MOMENTUM (só no contexto pessoal) -->
-    <div x-show="context === 'personal'" class="pb-4" style="border-bottom:1px solid var(--border)">
-      <!-- Streak header -->
-      <div class="flex items-end justify-between mb-3">
-        <div class="flex items-baseline gap-2">
-          <span class="text-2xl leading-none">🔥</span>
-          <span class="text-3xl font-extrabold text-white leading-none font-mono" x-text="momentum.streak"></span>
-          <span class="text-[10px] text-slate-600 font-bold uppercase tracking-wider self-end pb-0.5">dias</span>
+    <div x-show="context === 'personal'" class="pb-5 relative overflow-hidden rounded-2xl"
+      :class="{ 'frenzy-glow': momentum.combo?.is_frenzy }"
+      style="border-bottom:1px solid var(--border)">
+
+      <!-- Streak + frenzy badge -->
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-1">
+          <template x-for="(f, i) in streakFlames().split('')" :key="i">
+            <span class="streak-flame text-lg leading-none" x-text="f"></span>
+          </template>
+          <span x-show="momentum.streak > 0"
+            class="text-xl font-black text-white ml-1 leading-none"
+            x-text="momentum.streak"></span>
+          <span x-show="momentum.streak > 0"
+            class="text-[9px] font-bold uppercase tracking-wider text-slate-500 ml-1">dias</span>
         </div>
-        <div class="text-right leading-tight">
-          <p class="text-[10px] text-slate-600 font-bold uppercase tracking-wider">hoje</p>
-          <p class="font-mono text-sm">
-            <span class="font-bold" :class="momentum.today_points >= 0 ? 'text-emerald-400' : 'text-red-400'"
-              x-text="(momentum.today_points >= 0 ? '+' : '') + momentum.today_points + ' pts'"></span>
-            <span class="text-slate-700 mx-0.5">·</span>
-            <span class="text-slate-400" x-text="momentum.completion_pct + '%'"></span>
-          </p>
+        <div x-show="momentum.combo?.is_frenzy"
+          class="flex items-center gap-1 px-2.5 py-1 rounded-full frenzy-shimmer"
+          style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3)">
+          <span class="text-xs font-black text-red-400 uppercase tracking-wider">Frenzy</span>
         </div>
       </div>
 
-      <!-- Week dots -->
-      <div class="flex gap-1 justify-between mb-3 px-1">
-        <template x-for="day in momentum.week" :key="day.date">
-          <div class="flex flex-col items-center gap-1.5">
-            <span class="text-[9px] font-bold uppercase tracking-wider"
-              :class="day.is_today ? 'text-cyan-400' : 'text-slate-700'"
-              x-text="day.day"></span>
-            <span class="w-2.5 h-2.5 rounded-full transition-all"
-              :style="day.is_today ? 'background:#22d3ee;box-shadow:0 0 6px #22d3ee88' : ''"
+      <!-- Energy bar -->
+      <div class="mb-3">
+        <div class="energy-bar"
+          :class="{
+            'energy-cold': energyLevel() === 'cold',
+            'energy-warm': energyLevel() === 'warm',
+            'energy-hot': energyLevel() === 'hot',
+            'energy-fire': energyLevel() === 'fire',
+          }">
+          <div class="energy-bar-fill" :style="'width:' + energyWidth()"></div>
+        </div>
+      </div>
+
+      <!-- Combo dots + until frenzy hint -->
+      <div class="flex items-center justify-between mb-4">
+        <div class="combo-track">
+          <template x-for="(dot, i) in comboDots()" :key="i">
+            <div class="combo-dot"
               :class="{
-                'bg-emerald-400': !day.is_today && day.grade === 'good',
-                'bg-yellow-400/60': !day.is_today && day.grade === 'neutral',
-                'bg-red-400/50': !day.is_today && day.grade === 'bad',
-                'bg-slate-800': !day.is_today && !day.grade
-              }"></span>
+                'combo-dot-active': dot.active && !dot.isFrenzy,
+                'combo-dot-frenzy': dot.isFrenzy,
+              }"
+              :style="dot.active ? 'background:' + dot.color + ';box-shadow:0 0 4px ' + dot.color : 'background:var(--border)'"></div>
+          </template>
+        </div>
+        <span x-show="momentum.combo?.until_frenzy > 0 && (momentum.combo?.current_position || 0) >= 3"
+          class="text-[9px] text-slate-600 font-mono"
+          x-text="'+' + momentum.combo?.until_frenzy + ' pro frenzy'"></span>
+      </div>
+
+      <!-- Week dots -->
+      <div class="flex justify-between mb-5 px-1">
+        <template x-for="day in momentum.week" :key="day.date">
+          <div class="flex flex-col items-center gap-2">
+            <span class="text-[9px] font-bold uppercase tracking-wider"
+              :class="day.is_today ? 'text-white' : 'text-slate-600'"
+              x-text="day.day"></span>
+            <div class="week-dot"
+              :class="{
+                'week-dot-good': day.grade === 'good',
+                'week-dot-neutral': day.grade === 'neutral',
+                'week-dot-bad': day.grade === 'bad',
+                'week-dot-empty': !day.grade,
+                'week-dot-today': day.is_today,
+              }"></div>
           </div>
         </template>
       </div>
 
-      <!-- Progress bar -->
-      <div class="h-1 rounded-full mb-4 overflow-hidden" style="background:rgba(255,255,255,0.05)">
-        <div class="h-full rounded-full transition-all duration-500"
-          :style="`width:${momentum.completion_pct}%;background:linear-gradient(90deg,#06b6d4,#8b5cf6)`"></div>
-      </div>
-
       <!-- Habits header -->
-      <div class="flex items-center justify-between mb-2">
-        <span class="section-label">🏋️ Hábitos</span>
-        <div class="flex items-center gap-2">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Hábitos</span>
+        <div class="flex items-center gap-3">
           <button @click="showManageHabits = !showManageHabits"
             class="text-[10px] transition-colors"
             :class="showManageHabits ? 'text-cyan-400' : 'text-slate-600 hover:text-slate-300'">gerenciar</button>
-          <button @click="showHabitModal = true" class="text-[10px] text-slate-600 hover:text-slate-300 transition-colors">+ novo</button>
+          <button @click="showHabitModal = true"
+            class="text-[10px] text-slate-600 hover:text-slate-300 transition-colors font-bold">+ novo</button>
         </div>
       </div>
 
@@ -1479,65 +1664,42 @@
         <div x-show="habits.length === 0" class="text-xs text-slate-700 italic py-1">Nenhum hábito cadastrado</div>
       </div>
 
-      <!-- Habit rows (hoje) -->
-      <div x-show="!showManageHabits" class="flex flex-col gap-1.5">
+      <!-- Habit rows (hoje) — Apple Fitness ring style -->
+      <div x-show="!showManageHabits" class="flex flex-col gap-2.5">
         <template x-for="habit in momentum.habits" :key="habit.habit_id">
-          <div class="flex items-center gap-2 group">
-            <!-- Circle check (weekly: mostra contador) -->
-            <template x-if="habit.week_target">
-              <button @click="toggleHabit(habit)"
-                class="w-6 h-6 rounded-full flex items-center justify-center transition-all shrink-0 border"
-                :class="habit.week_done >= habit.week_target
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                  : 'border-slate-700 text-slate-400 hover:border-purple-400'">
-                <span class="text-[9px] font-bold" x-text="habit.week_done + '/' + habit.week_target"></span>
-              </button>
-            </template>
-            <template x-if="!habit.week_target">
-              <button @click="habit.proposed && toggleHabit(habit)"
-                class="w-6 h-6 rounded-full flex items-center justify-center text-xs transition-all shrink-0 border"
-                :class="habit.done
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                  : habit.proposed
-                    ? 'border-slate-700 text-slate-600 hover:border-slate-400'
-                    : 'border-slate-800 text-slate-800 cursor-default'">
-                <span x-show="habit.done">✓</span>
-              </button>
-            </template>
-            <!-- Icon + name -->
-            <span class="text-sm leading-none shrink-0" x-text="habit.icon || '⭐'"></span>
-            <span class="flex-1 text-sm min-w-0 truncate"
-              :class="(habit.week_target ? habit.week_done >= habit.week_target : habit.done) ? 'text-slate-500 line-through' : 'text-slate-300'"
-              x-text="habit.name"></span>
-            <!-- Flex sem weekly_target: propose buttons -->
-            <template x-if="habit.frequency === 'flex' && !habit.proposed && !habit.week_target">
-              <div class="flex items-center gap-1 shrink-0">
-                <span class="text-[9px] px-1.5 py-0.5 rounded font-bold"
-                  style="background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3)">flex</span>
-                <button @click="proposeHabit(habit)"
-                  class="text-[9px] px-1.5 py-0.5 rounded transition-colors"
-                  style="background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.2)">hoje</button>
-                <button @click="proposeAndCheck(habit)"
-                  class="text-[9px] px-1.5 py-0.5 rounded transition-colors"
-                  style="background:rgba(16,185,129,0.1);color:#34d399;border:1px solid rgba(16,185,129,0.2)">✓</button>
+          <div class="flex items-center gap-3">
+            <!-- Ring button -->
+            <button @click="habit.proposed ? toggleHabit(habit) : proposeAndCheck(habit)"
+              class="habit-ring"
+              :class="habit.done ? 'habit-ring-done' : 'habit-ring-pending'">
+              <span x-show="habit.done" class="text-emerald-400 text-sm font-bold">✓</span>
+              <span x-show="!habit.done" class="text-sm" x-text="habit.icon || '⭐'"></span>
+            </button>
+            <!-- Info -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm font-medium truncate"
+                  :class="habit.done ? 'text-emerald-300' : 'text-slate-200'"
+                  x-text="habit.name"></span>
+                <span x-show="habit.streak >= 2" class="habit-streak-fire"
+                  x-text="'🔥' + habit.streak"></span>
               </div>
-            </template>
-            <!-- Difficulty dots -->
-            <div class="flex gap-0.5 shrink-0">
-              <template x-for="i in [1,2,3]" :key="i">
+              <div class="flex gap-1 mt-1">
                 <span class="w-1.5 h-1.5 rounded-full"
-                  :class="i <= habit.difficulty
-                    ? (habit.difficulty === 1 ? 'bg-emerald-400' : habit.difficulty === 2 ? 'bg-yellow-400' : 'bg-red-400')
-                    : 'bg-slate-800'"></span>
-              </template>
+                  :class="habit.difficulty >= 1 ? 'bg-emerald-400' : 'bg-slate-800'"></span>
+                <span class="w-1.5 h-1.5 rounded-full"
+                  :class="habit.difficulty >= 2 ? 'bg-yellow-400' : 'bg-slate-800'"></span>
+                <span class="w-1.5 h-1.5 rounded-full"
+                  :class="habit.difficulty >= 3 ? 'bg-red-400' : 'bg-slate-800'"></span>
+              </div>
             </div>
-            <!-- Streak (não-weekly) -->
-            <span x-show="habit.streak > 0 && !habit.week_target" class="text-[10px] font-mono text-orange-400 shrink-0"
-              x-text="'🔥' + habit.streak"></span>
-            <!-- Points -->
-            <span class="text-[10px] font-mono shrink-0"
-              :class="(habit.week_target ? habit.week_done >= habit.week_target : habit.done) ? 'text-emerald-400' : 'text-slate-700'"
-              x-text="'+' + habit.points_done"></span>
+            <!-- Flex propose button -->
+            <button x-show="habit.frequency === 'flex' && !habit.proposed"
+              @click="proposeHabit(habit)"
+              class="text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition-all text-cyan-400 hover:text-cyan-300 active:scale-95 shrink-0"
+              style="border:1px solid rgba(34,211,238,0.3);background:rgba(34,211,238,0.05)">
+              Hoje!
+            </button>
           </div>
         </template>
         <button x-show="momentum.habits.length === 0"
@@ -1546,6 +1708,28 @@
           Criar primeiro hábito →
         </button>
       </div>
+
+      <!-- Records flash -->
+      <template x-for="rec in (momentum.new_records || [])" :key="rec.record_type">
+        <div class="mt-3 px-3 py-2 rounded-xl record-flash flex items-center gap-2"
+          style="border:1px solid var(--border)">
+          <span class="text-base">🏆</span>
+          <span class="text-xs font-bold text-amber-300"
+            x-text="{
+              'max_tasks_day': 'Novo record — melhor dia!',
+              'max_combo': 'Novo record — maior combo!',
+              'max_streak': 'Novo record — maior streak!',
+            }[rec.record_type] || 'Novo record!'"></span>
+        </div>
+      </template>
+
+      <!-- Milestones -->
+      <template x-for="m in (momentum.milestones || [])" :key="m">
+        <div class="mt-2 px-3 py-2 rounded-xl flex items-center gap-2 record-flash"
+          style="border:1px solid rgba(168,85,247,0.2);background:rgba(168,85,247,0.05)">
+          <span class="text-xs font-bold text-purple-300" x-text="m"></span>
+        </div>
+      </template>
     </div>
 
     <!-- OVERDUE -->
@@ -2332,7 +2516,8 @@ function pedroOS() {
     _noteDebounce: {},
 
     // Habits & Points
-    momentum: { date: '', streak: 0, total_points: 0, today_points: 0, tasks_proposed: 0, tasks_done: 0, completion_pct: 0, grade: 'neutral', habits: [], week: [] },
+    momentum: { date: '', streak: 0, total_points: 0, today_points: 0, today_base_points: 0, tasks_proposed: 0, tasks_done: 0, completion_pct: 0, grade: 'neutral', combo: { current_position: 0, current_multiplier: 1.0, next_multiplier: null, is_frenzy: false, until_frenzy: 7 }, habits: [], week: [], new_records: [], milestones: [] },
+    comboToast: null,
     habits: [],
     showHabitModal: false,
     showEmojiPick: false,
@@ -2930,8 +3115,18 @@ function pedroOS() {
 
     async quickDone(task) {
       await this.api(`/api/tasks/${task.id}/done`, 'POST');
-      this.showToast(`✅ #${task.short_id} concluída`);
       this.removeTaskFromView(task.id);
+      if (this.context === 'personal') {
+        await this.loadMomentum();
+        const pos = this.momentum.combo?.current_position || 1;
+        const mult = this.momentum.combo?.current_multiplier || 1;
+        const isFrenzy = this.momentum.combo?.is_frenzy || false;
+        this.comboToast = { position: pos, multiplier: mult, isFrenzy };
+        setTimeout(() => { this.comboToast = null; }, 3000);
+        this.showToast('✓ Feita');
+      } else {
+        this.showToast(`✅ #${task.short_id} concluída`);
+      }
     },
 
     async quickDoneSubtask(sub) {
@@ -3432,6 +3627,42 @@ function pedroOS() {
       if (res && !res._error) this.momentum = res;
     },
 
+    energyLevel() {
+      const done = this.momentum.combo?.current_position || 0;
+      if (done >= 7) return 'fire';
+      if (done >= 5) return 'hot';
+      if (done >= 3) return 'warm';
+      if (done >= 1) return 'cold';
+      return '';
+    },
+
+    energyWidth() {
+      const done = this.momentum.combo?.current_position || 0;
+      if (done === 0) return '0%';
+      if (done >= 7) return '100%';
+      return Math.min(15 + (done * 13), 95) + '%';
+    },
+
+    streakFlames() {
+      const s = this.momentum.streak || 0;
+      if (s === 0) return '🔥';
+      if (s >= 7) return '🔥🔥🔥🔥🔥';
+      if (s >= 5) return '🔥🔥🔥🔥';
+      if (s >= 3) return '🔥🔥🔥';
+      if (s >= 2) return '🔥🔥';
+      return '🔥';
+    },
+
+    comboDots() {
+      const pos = this.momentum.combo?.current_position || 0;
+      const colors = ['#3b82f6','#3b82f6','#10b981','#10b981','#f59e0b','#f59e0b','#ef4444'];
+      return Array.from({ length: 7 }, (_, i) => ({
+        active: i < pos,
+        color: colors[i],
+        isFrenzy: i === 6 && pos >= 7,
+      }));
+    },
+
     async loadHabits() {
       const res = await this.api('/api/habits');
       if (res && !res._error) this.habits = res;
@@ -3439,7 +3670,6 @@ function pedroOS() {
 
     async toggleHabit(habit) {
       if (habit.week_target) {
-        // Weekly: check adiciona 1; se já completo, uncheck remove 1
         const endpoint = habit.week_done < habit.week_target ? 'check' : 'uncheck';
         await this.api(`/api/habits/${habit.habit_id}/${endpoint}`, 'POST');
       } else {
@@ -3449,6 +3679,14 @@ function pedroOS() {
         habit.done = newDone;
       }
       await this.loadMomentum();
+      const checking = !habit.done || habit.week_target;
+      if (checking) {
+        const pos = this.momentum.combo?.current_position || 1;
+        const mult = this.momentum.combo?.current_multiplier || 1;
+        const isFrenzy = this.momentum.combo?.is_frenzy || false;
+        this.comboToast = { position: pos, multiplier: mult, isFrenzy };
+        setTimeout(() => { this.comboToast = null; }, 3000);
+      }
     },
 
     async createHabit() {

@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     from app.features.tasks.models import Task, Checklist, TaskLink, TaskImage, WaProcessed  # noqa: F401
     from app.features.integrations.models import PendingCalendarEvent  # noqa: F401
     from app.features.notes.models import Note  # noqa: F401
-    from app.features.habits.models import Habit, HabitLog, DayScore  # noqa: F401
+    from app.features.habits.models import Habit, HabitLog, DayScore, PersonalRecord  # noqa: F401
     from app.features.shopping.models import ShoppingItem  # noqa: F401
 
     os.makedirs("data", exist_ok=True)
@@ -74,6 +74,14 @@ async def lifespan(app: FastAPI):
             pass
         try:
             await conn.execute(text("ALTER TABLE habits ADD COLUMN weekly_target INTEGER"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE day_scores ADD COLUMN combo_max INTEGER DEFAULT 0"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE day_scores ADD COLUMN tasks_total_done INTEGER DEFAULT 0"))
         except Exception:
             pass
 

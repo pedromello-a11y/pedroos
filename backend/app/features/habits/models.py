@@ -38,3 +38,13 @@ class DayScore(Base):
     points_lost = Column(Integer, default=0)
     streak = Column(Integer, default=0)
     grade = Column(Text)  # "good", "neutral", "bad"
+    combo_max = Column(Integer, default=0)
+    tasks_total_done = Column(Integer, default=0)
+
+
+class PersonalRecord(Base):
+    __tablename__ = "personal_records"
+
+    record_type = Column(Text, primary_key=True)  # "max_tasks_day", "max_streak", etc.
+    value = Column(Integer, default=0)
+    achieved_at = Column(Text)

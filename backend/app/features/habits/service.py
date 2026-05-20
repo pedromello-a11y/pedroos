@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-from app.features.habits.models import Habit, HabitLog, DayScore
+from app.features.habits.models import Habit, HabitLog, DayScore, PersonalRecord
 from app.features.habits.schemas import HabitCreate, HabitUpdate, DIFFICULTY_POINTS, HabitTodayItem
 from app.features.tasks.models import Task
 from app.shared.dates import now_brt, today_brt
@@ -418,6 +418,58 @@ async def calculate_day_score(db: AsyncSession, d: date = None) -> DayScore:
     return score
 
 
+def _compute_combo(tasks_done: int, habits_done: int) -> dict:
+    pos = tasks_done + habits_done
+    if pos <= 2:
+        mult = 1.0
+    elif pos <= 4:
+        mult = 1.5
+    elif pos <= 6:
+        mult = 2.0
+    else:
+        mult = 4.0
+    next_mult = None if pos >= 7 else (1.0 if pos < 2 else 1.5 if pos < 4 else 2.0 if pos < 6 else 4.0)
+    return {
+        "current_position": pos,
+        "current_multiplier": mult,
+        "next_multiplier": next_mult,
+        "is_frenzy": pos >= 7,
+        "until_frenzy": max(0, 7 - pos),
+    }
+
+
+async def _check_and_update_records(db: AsyncSession, today: date, score: DayScore, combo: dict) -> list[dict]:
+    new_records = []
+    checks = [
+        ("max_tasks_day", score.tasks_done),
+        ("max_streak", score.streak),
+        ("max_combo", combo["current_position"]),
+    ]
+    for record_type, today_value in checks:
+        if today_value <= 0:
+            continue
+        res = await db.execute(select(PersonalRecord).where(PersonalRecord.record_type == record_type))
+        rec = res.scalar_one_or_none()
+        if rec is None:
+            db.add(PersonalRecord(record_type=record_type, value=today_value, achieved_at=today.isoformat()))
+        elif today_value > rec.value:
+            rec.value = today_value
+            rec.achieved_at = today.isoformat()
+            new_records.append({"record_type": record_type, "value": today_value})
+    await db.commit()
+    return new_records
+
+
+def _get_milestones(score: DayScore, combo: dict) -> list[str]:
+    milestones = []
+    pos = combo["current_position"]
+    if pos == 7:
+        milestones.append("🔥 Frenzy ativado — modo lendário!")
+    if score.streak in (7, 14, 30, 60, 100):
+        milestones.append(f"🗓 {score.streak} dias de streak — incrível!")
+    return milestones
+
+
 async def get_today_status(db: AsyncSession) -> dict:
     today = today_brt()
 
@@ -452,15 +504,23 @@ async def get_today_status(db: AsyncSession) -> dict:
     done_items = score.tasks_done + score.habits_done
     pct = int((done_items / total_items) * 100) if total_items > 0 else 0
 
+    combo = _compute_combo(score.tasks_done, score.habits_done)
+    new_records = await _check_and_update_records(db, today, score, combo)
+    milestones = _get_milestones(score, combo)
+
     return {
         "date": today.isoformat(),
         "streak": score.streak,
         "total_points": total_points,
         "today_points": score.points_earned - score.points_lost,
+        "today_base_points": score.points_earned,
         "tasks_proposed": score.tasks_proposed,
         "tasks_done": score.tasks_done,
         "completion_pct": pct,
         "grade": score.grade or "neutral",
+        "combo": combo,
         "habits": [h.model_dump() for h in habits],
         "week": week,
+        "new_records": new_records,
+        "milestones": milestones,
     }
