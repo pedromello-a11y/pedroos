@@ -1247,7 +1247,7 @@
         style="background:var(--card);border:1px solid var(--border)">
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-1">
-            <template x-for="(f, i) in streakFlames().split('')" :key="i">
+            <template x-for="(f, i) in [...streakFlames()]" :key="i">
               <span class="streak-flame text-base leading-none" x-text="f"></span>
             </template>
             <span x-show="momentum.streak > 0" class="text-lg font-black text-white ml-1" x-text="momentum.streak"></span>
@@ -1353,7 +1353,7 @@
     <div class="pb-3" style="border-bottom:1px solid var(--border)">
       <p class="section-label mb-1">Hoje</p>
       <div class="flex items-baseline gap-3">
-        <p class="text-xl font-bold text-white capitalize" x-text="formatDateFull(todayStr)"></p>
+        <p class="text-xl font-bold text-white capitalize" x-text="formatDateFull(todayStr())"></p>
         <p class="text-xl font-bold text-slate-500 font-mono" x-text="currentTime"></p>
       </div>
     </div>
@@ -1568,7 +1568,7 @@
       <!-- Streak + frenzy badge -->
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-1">
-          <template x-for="(f, i) in streakFlames().split('')" :key="i">
+          <template x-for="(f, i) in [...streakFlames()]" :key="i">
             <span class="streak-flame text-lg leading-none" x-text="f"></span>
           </template>
           <span x-show="momentum.streak > 0"
