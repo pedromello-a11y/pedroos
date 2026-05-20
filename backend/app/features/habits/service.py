@@ -261,6 +261,7 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
 
         log_result = await db.execute(
             select(HabitLog).where(HabitLog.habit_id == habit.id, HabitLog.date == date_str)
+            .order_by(HabitLog.created_at.desc()).limit(1)
         )
         log = log_result.scalar_one_or_none()
 
