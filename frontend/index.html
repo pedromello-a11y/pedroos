@@ -86,9 +86,32 @@
       background: var(--card);
       border: 1px solid var(--border);
       cursor: pointer;
-      transition: border-color 0.13s, background 0.13s;
+      transition: border-color 0.16s, background 0.16s, transform 0.16s, box-shadow 0.16s;
     }
-    .task-row:hover { border-color: var(--border2); background: #131C28; }
+    .task-row:hover {
+      border-color: var(--border2);
+      background: #131C28;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    }
+    /* Drag handle: oculto por padrão, aparece no hover */
+    .task-row .drag-handle {
+      opacity: 0;
+      transition: opacity 0.18s ease;
+    }
+    .task-row:hover .drag-handle { opacity: 0.6; }
+    .task-row .drag-handle:hover { opacity: 1 !important; }
+
+    /* Animação de tarefa completada */
+    .task-row.completing {
+      animation: task-complete 0.45s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      pointer-events: none;
+    }
+    @keyframes task-complete {
+      0%   { transform: translateX(0)   scale(1);    opacity: 1; background: var(--card); }
+      35%  { transform: translateX(0)   scale(1.02); opacity: 1; background: rgba(16,185,129,0.18); border-color: rgba(16,185,129,0.5); box-shadow: 0 0 24px rgba(16,185,129,0.4); }
+      100% { transform: translateX(40px) scale(0.96); opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; }
+    }
 
     .sb-row {
       display: flex;
@@ -194,17 +217,15 @@
       box-shadow: 0 0 8px rgba(16,185,129,0.30);
     }
     .task-row-todo {
-      background: rgba(245,158,11,0.04) !important;
-      border-left: 3px solid #F59E0B !important;
+      /* aguardando = neutro, não alarme */
     }
     .status-chip-todo {
-      color: #F59E0B;
-      border-color: #F59E0B;
-      background: rgba(245,158,11,0.12);
+      color: #94a3b8;
+      border-color: #334155;
+      background: rgba(148,163,184,0.08);
     }
     .task-row-queued {
-      border-left: 2px solid #4B5563 !important;
-      opacity: 0.8;
+      opacity: 0.78;
     }
     .status-chip-queued {
       color: #9CA3AF;
@@ -677,18 +698,31 @@
     <!-- Eficácia hoje (discreto) -->
     <div x-cloak
       class="flex items-center gap-2 text-[11px] shrink-0 pl-1 font-mono"
-      title="Streak · pontos hoje · % eficácia">
-      <span class="text-slate-700">🔥</span>
-      <span class="font-bold text-slate-300" x-text="momentum.streak"></span>
-      <span class="text-slate-800">·</span>
-      <span :class="momentum.today_points >= 0 ? 'text-emerald-400' : 'text-red-400'"
-        x-text="(momentum.today_points >= 0 ? '+' : '') + momentum.today_points"></span>
-      <span class="text-slate-800">·</span>
-      <span :class="momentum.completion_pct >= 70 ? 'text-emerald-400'
-        : momentum.completion_pct >= 40 ? 'text-yellow-400'
-        : momentum.tasks_proposed + momentum.habits.length === 0 ? 'text-slate-600'
-        : 'text-slate-500'"
-        x-text="momentum.completion_pct + '%'"></span>
+      title="Energia do dia · streak"
+      style="min-width:60px">
+      <!-- Streak flames (sem número) -->
+      <div class="flex items-center gap-0.5" x-show="momentum.streak > 0">
+        <template x-for="(f, i) in [...streakFlames()]" :key="i">
+          <span class="streak-flame text-sm leading-none" x-text="f"></span>
+        </template>
+      </div>
+      <!-- Mini energy bar -->
+      <div class="w-12 h-1 rounded-full overflow-hidden" style="background:var(--border)">
+        <div class="h-full transition-all"
+          :class="{
+            'energy-cold': energyLevel() === 'cold',
+            'energy-warm': energyLevel() === 'warm',
+            'energy-hot':  energyLevel() === 'hot',
+            'energy-fire': energyLevel() === 'fire',
+          }"
+          :style="'width:' + energyWidth()">
+          <div class="energy-bar-fill h-full" :style="'width:100%'"></div>
+        </div>
+      </div>
+      <!-- Frenzy badge -->
+      <span x-show="momentum.combo?.is_frenzy"
+        class="text-[9px] font-black uppercase tracking-wider text-red-400 px-1.5 py-0.5 rounded-full"
+        style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3)">🔥</span>
     </div>
 
     <!-- Quick capture — desktop only -->
@@ -939,6 +973,7 @@
               <template x-for="task in group.tasks" :key="task.id">
           <div>
             <div @click="openModal(task)" class="task-row group"
+              :data-task-id="task.id"
               :class="[task.status === 'doing' ? 'task-row-doing' : task.status === 'todo' ? 'task-row-todo' : task.status === 'queued' ? 'task-row-queued' : task.status === 'backlog' ? 'task-row-backlog' : '', task.deadline && task.deadline < todayStr && task.status !== 'doing' ? 'overdue-row' : '', _blNestOver === task.id ? 'bl-nest-over' : (_blDragOver === task.id ? 'bl-drag-over' : '')]"
               :style="task.deadline && task.deadline < todayStr && task.status !== 'doing' ? 'border-left: 2px solid #EF4444' : ''"
               draggable="true"
@@ -947,11 +982,12 @@
               @dragleave="_blDragOver = null; _blNestOver = null"
               @drop.prevent="blDropFlat($event, task)"
               @dragend="_blDragItem = null; _blDragSourceGroup = null; _blDragOver = null; _blNestOver = null">
-              <span class="text-slate-700 hover:text-slate-400 text-sm shrink-0 select-none mr-1"
+              <span class="drag-handle text-slate-700 hover:text-slate-400 text-sm shrink-0 select-none mr-1"
                 style="cursor:grab" @click.stop>⠿</span>
               <span class="priority-bar" :class="priorityBarClass(task.priority)"></span>
-              <!-- project tag -->
-              <span style="width:72px;min-width:72px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center" class="mob-hide-col">
+              <!-- project tag (só em Hotmart, onde varia entre Galaxy/FIRE/etc) -->
+              <span x-show="context === 'hotmart'"
+                style="width:72px;min-width:72px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center" class="mob-hide-col">
                 <span class="text-[9px] font-bold rounded"
                   style="max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 6px"
                   :style="task.project_slug && projects.find(p => p.slug === task.project_slug) ? projectTagStyle(task.project_slug) : 'visibility:hidden'"
@@ -1041,7 +1077,7 @@
                     @dragleave="_blDragOver = null"
                     @drop.prevent="blDropFlat($event, sub)"
                     @dragend="_blDragItem = null; _blDragSourceGroup = null; _blDragOver = null; _blNestOver = null">
-                    <span class="text-slate-700 hover:text-slate-400 text-sm shrink-0 select-none mr-1" style="cursor:grab" @click.stop>⠿</span>
+                    <span class="drag-handle text-slate-700 hover:text-slate-400 text-sm shrink-0 select-none mr-1" style="cursor:grab" @click.stop>⠿</span>
                     <span style="width:3px;min-width:3px;flex-shrink:0;visibility:hidden"></span>
                     <span style="width:72px;min-width:72px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;padding-right:6px">
                       <span style="color:#334155;font-size:13px;line-height:1">↳</span>
@@ -1565,17 +1601,12 @@
       :class="{ 'frenzy-glow': momentum.combo?.is_frenzy }"
       style="border-bottom:1px solid var(--border)">
 
-      <!-- Streak + frenzy badge -->
+      <!-- Streak (só chamas, sem número) + frenzy badge -->
       <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-0.5" :title="momentum.streak + ' dias seguidos'">
           <template x-for="(f, i) in [...streakFlames()]" :key="i">
-            <span class="streak-flame text-lg leading-none" x-text="f"></span>
+            <span class="streak-flame text-2xl leading-none" x-text="f"></span>
           </template>
-          <span x-show="momentum.streak > 0"
-            class="text-xl font-black text-white ml-1 leading-none"
-            x-text="momentum.streak"></span>
-          <span x-show="momentum.streak > 0"
-            class="text-[9px] font-bold uppercase tracking-wider text-slate-500 ml-1">dias</span>
         </div>
         <div x-show="momentum.combo?.is_frenzy"
           class="flex items-center gap-1 px-2.5 py-1 rounded-full frenzy-shimmer"
@@ -1606,7 +1637,7 @@
                 'combo-dot-active': dot.active && !dot.isFrenzy,
                 'combo-dot-frenzy': dot.isFrenzy,
               }"
-              :style="dot.active ? 'background:' + dot.color + ';box-shadow:0 0 4px ' + dot.color : 'background:var(--border)'"></div>
+              :style="dot.active ? 'background:' + dot.color + ';box-shadow:0 0 4px ' + dot.color : 'background:' + dot.inactiveColor + ';opacity:0.55'"></div>
           </template>
         </div>
         <span x-show="momentum.combo?.until_frenzy > 0 && (momentum.combo?.current_position || 0) >= 3"
@@ -1785,9 +1816,8 @@
         <span class="section-label ac">☀️ Vence hoje</span>
         <span x-show="filteredTodayTasks.length > 0" class="text-[10px] font-bold ac font-mono" x-text="filteredTodayTasks.length"></span>
       </div>
-      <div x-show="filteredTodayTasks.length === 0" class="text-xs text-slate-600 italic px-1">
-        Nada pra entregar hoje 🎉
-      </div>
+      <div x-show="filteredTodayTasks.length === 0" class="text-xs text-slate-600 italic px-1"
+        x-text="emptyTodayMsg()"></div>
       <div class="flex flex-col gap-1.5">
         <template x-for="task in filteredTodayTasks" :key="task.id">
           <div @click="openModal(task)" class="sb-row">
@@ -3142,8 +3172,25 @@ function pedroOS() {
       this.loadInbox();
     },
 
+    emptyTodayMsg() {
+      const hour = new Date().getHours();
+      const msgs = this.context === 'personal'
+        ? ['Sem prazo apertando hoje 🏖', 'Dia livre, aproveita ✨', 'Tranquilo por enquanto 🌿', 'Hoje você dita o ritmo 🎧']
+        : ['Sem entregas hoje 🎯', 'Dia limpo de prazo 📭', 'Foco no que importa 🧭', 'Sem corrida hoje, só ritmo 🚶'];
+      // Mensagem estável por hora pra não piscar a cada render
+      return msgs[hour % msgs.length];
+    },
+
+    async _animateRowOut(taskId) {
+      const el = document.querySelector(`[data-task-id="${taskId}"]`);
+      if (!el) return;
+      el.classList.add('completing');
+      await new Promise(r => setTimeout(r, 380));
+    },
+
     async quickDone(task) {
       await this.api(`/api/tasks/${task.id}/done`, 'POST');
+      await this._animateRowOut(task.id);
       this.removeTaskFromView(task.id);
       if (this.context === 'personal') {
         await this.loadMomentum();
@@ -3684,11 +3731,13 @@ function pedroOS() {
 
     comboDots() {
       const pos = this.momentum.combo?.current_position || 0;
-      const colors = ['#3b82f6','#3b82f6','#10b981','#10b981','#f59e0b','#f59e0b','#ef4444'];
+      const colors    = ['#3b82f6','#3b82f6','#10b981','#10b981','#f59e0b','#f59e0b','#ef4444'];
+      const inactive  = ['#1e3a5f','#1e3a5f','#064e3b','#064e3b','#78350f','#78350f','#7f1d1d'];
       return Array.from({ length: 7 }, (_, i) => ({
         active: i < pos,
-        color: colors[i],
-        isFrenzy: i === 6 && pos >= 7,
+        color:        colors[i],
+        inactiveColor: inactive[i],
+        isFrenzy:     i === 6 && pos >= 7,
       }));
     },
 
