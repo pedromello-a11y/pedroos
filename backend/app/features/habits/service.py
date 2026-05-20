@@ -460,13 +460,13 @@ async def _check_and_update_records(db: AsyncSession, today: date, score: DaySco
     return new_records
 
 
-def _get_milestones(score: DayScore, combo: dict) -> list[str]:
+def _get_milestones(streak: int, combo: dict) -> list[str]:
     milestones = []
     pos = combo["current_position"]
     if pos == 7:
         milestones.append("🔥 Frenzy ativado — modo lendário!")
-    if score.streak in (7, 14, 30, 60, 100):
-        milestones.append(f"🗓 {score.streak} dias de streak — incrível!")
+    if streak in (7, 14, 30, 60, 100):
+        milestones.append(f"🗓 {streak} dias de streak — incrível!")
     return milestones
 
 
@@ -486,11 +486,21 @@ async def get_today_status(db: AsyncSession) -> dict:
 
     habits = await get_habits_for_date(db, today)
 
+    # Extrair valores de score ANTES de qualquer commit adicional (evita MissingGreenlet em async)
+    s_streak = score.streak
+    s_tasks_proposed = score.tasks_proposed
+    s_tasks_done = score.tasks_done
+    s_habits_done = score.habits_done
+    s_habits_missed = score.habits_missed
+    s_points_earned = score.points_earned
+    s_points_lost = score.points_lost
+    s_grade = score.grade or "neutral"
+
     # Conta ações individuais: cada check conta pro combo (não só meta semanal completa)
     habit_actions = sum(1 for h in habits if h.done or h.week_done > 0)
-    combo = _compute_combo(score.tasks_done, habit_actions)
+    combo = _compute_combo(s_tasks_done, habit_actions)
     new_records = await _check_and_update_records(db, today, score, combo)
-    milestones = _get_milestones(score, combo)
+    milestones = _get_milestones(s_streak, combo)
 
     week = []
     for i in range(6, -1, -1):
@@ -506,20 +516,20 @@ async def get_today_status(db: AsyncSession) -> dict:
             "is_today": d == today,
         })
 
-    total_items = score.tasks_proposed + score.habits_done + score.habits_missed
-    done_items = score.tasks_done + score.habits_done
+    total_items = s_tasks_proposed + s_habits_done + s_habits_missed
+    done_items = s_tasks_done + s_habits_done
     pct = int((done_items / total_items) * 100) if total_items > 0 else 0
 
     return {
         "date": today.isoformat(),
-        "streak": score.streak,
+        "streak": s_streak,
         "total_points": total_points,
-        "today_points": score.points_earned - score.points_lost,
-        "today_base_points": score.points_earned,
-        "tasks_proposed": score.tasks_proposed,
-        "tasks_done": score.tasks_done,
+        "today_points": s_points_earned - s_points_lost,
+        "today_base_points": s_points_earned,
+        "tasks_proposed": s_tasks_proposed,
+        "tasks_done": s_tasks_done,
         "completion_pct": pct,
-        "grade": score.grade or "neutral",
+        "grade": s_grade,
         "combo": combo,
         "habits": [h.model_dump() for h in habits],
         "week": week,
