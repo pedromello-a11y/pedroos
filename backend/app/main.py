@@ -123,6 +123,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.features.tasks.dashboard_router import router as dashboard_router
 from app.features.tasks.router import router as tasks_router, checklist_router, links_router, images_router
 from app.features.tasks.sse import router as sse_router
 from app.features.projects.router import router as projects_router
@@ -134,6 +135,7 @@ from app.features.shopping.router import router as shopping_router
 from app.features.ai.router import router as ai_router
 from app.features.refs.router import router as refs_router, boards_router as ref_boards_router
 
+app.include_router(dashboard_router)
 app.include_router(tasks_router)
 app.include_router(checklist_router)
 app.include_router(links_router)
@@ -159,8 +161,12 @@ if os.path.isdir(FRONTEND_DIR):
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
     @app.get("/")
-    async def serve_dashboard():
+    async def serve_index():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+    @app.get("/dashboard")
+    async def serve_dashboard():
+        return FileResponse(os.path.join(FRONTEND_DIR, "dashboard.html"))
 
 
 @app.post("/api/scheduler/test-daily")

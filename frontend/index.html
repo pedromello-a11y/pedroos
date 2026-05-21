@@ -1476,8 +1476,7 @@
             <!-- Thumbnail -->
             <div class="aspect-video w-full overflow-hidden relative"
               :style="!ref.thumbnail ? `background:${refPlaceholderBg(ref.source_type)}` : 'background:var(--surface)'">
-              <img x-show="ref.thumbnail" :src="ref.thumbnail"
-                referrerpolicy="no-referrer"
+              <img x-show="ref.thumbnail" :src="thumbSrc(ref.thumbnail)"
                 class="w-full h-full object-cover" loading="lazy"
                 @error="$el.style.display='none'" />
               <div x-show="!ref.thumbnail" class="w-full h-full flex items-center justify-center text-4xl"
@@ -1566,7 +1565,7 @@
         style="background:rgba(0,0,0,0.7)" @click.self="refModal.show = false">
         <div x-show="refModal.ref" class="card w-full max-w-lg shadow-2xl slide-up overflow-hidden">
           <div x-show="refModal.ref?.thumbnail" class="aspect-video w-full overflow-hidden" style="background:var(--surface)">
-            <img :src="refModal.ref?.thumbnail" referrerpolicy="no-referrer" class="w-full h-full object-cover" />
+            <img :src="thumbSrc(refModal.ref?.thumbnail)" class="w-full h-full object-cover" />
           </div>
           <div class="p-5">
             <div class="flex items-start justify-between gap-3 mb-3">
@@ -4401,6 +4400,12 @@ function pedroOS() {
                     behance: '🎨', dribbble: '🏀', pinterest: '📌',
                     figma: '✦', twitter: '𝕏', image: '🖼' };
       return map[type] || '🔗';
+    },
+
+    thumbSrc(url) {
+      if (!url) return '';
+      if (url.startsWith('/')) return url;
+      return `/api/refs/img-proxy?url=${encodeURIComponent(url)}`;
     },
 
     refPlaceholderBg(type) {
