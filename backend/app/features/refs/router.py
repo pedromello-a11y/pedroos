@@ -158,6 +158,32 @@ async def delete_ref(ref_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(404, "Ref não encontrada")
 
 
+@router.post("/{ref_id}/refresh-thumb")
+async def refresh_thumb(ref_id: str, db: AsyncSession = Depends(get_db)):
+    """Re-extrai metadata da URL e baixa nova thumb localmente.
+    Útil pra refs antigas cuja thumb expirou (CDN do Instagram)."""
+    ref = await service.get_ref(db, ref_id)
+    if not ref:
+        raise HTTPException(404, "Ref não encontrada")
+    if not ref.url:
+        raise HTTPException(400, "Ref sem URL — não dá pra re-extrair")
+    meta = await service.extract_metadata(ref.url)
+    new_thumb = meta.get("thumbnail")
+    if new_thumb and new_thumb.startswith("http") and service._is_volatile_thumb(new_thumb):
+        local = await service._download_thumb(new_thumb)
+        if local:
+            new_thumb = local
+    if new_thumb:
+        ref.thumbnail = new_thumb
+    if meta.get("title") and not ref.title:
+        ref.title = meta["title"]
+    from app.shared.dates import now_brt
+    ref.updated_at = now_brt().isoformat()
+    await db.commit()
+    await db.refresh(ref)
+    return await _ref_to_response(db, ref)
+
+
 @router.post("/{ref_id}/boards")
 async def add_to_board(ref_id: str, data: dict, db: AsyncSession = Depends(get_db)):
     board_name = data.get("board")
