@@ -55,8 +55,12 @@ async def upload_ref_image(
     file: UploadFile = File(...),
     note: Optional[str] = None,
     boards: Optional[str] = None,
+    url: Optional[str] = None,
+    title: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
+    """Sobe imagem como thumb. Se url for passada, vira ref desse link com a imagem
+    como thumbnail (caso clássico: screenshot de post do Instagram + link do post)."""
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     ext = os.path.splitext(file.filename or "")[1].lower() or ".jpg"
     stored = f"ref_{uuid.uuid4().hex[:12]}{ext}"
@@ -67,12 +71,22 @@ async def upload_ref_image(
     thumbnail_path = f"/uploads/{stored}"
     board_list = [b.strip() for b in (boards or "").split(",") if b.strip()]
 
+    # Se tem URL e não tem título, tenta extrair título da página
+    final_title = title or file.filename
+    source_type = "image"
+    if url:
+        source_type = None  # detect from URL
+        if not title:
+            meta = await service.extract_metadata(url)
+            if meta.get("title"):
+                final_title = meta["title"]
+
     data_obj = RefCreate(
-        url=None,
-        title=file.filename,
+        url=url,
+        title=final_title,
         note=note,
         thumbnail=thumbnail_path,
-        source_type="image",
+        source_type=source_type,
         boards=board_list,
         source="dashboard",
     )

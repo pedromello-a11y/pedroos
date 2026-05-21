@@ -1,5 +1,6 @@
 import uuid
 import re
+import html
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -97,6 +98,59 @@ async def _extract_youtube(url: str) -> dict:
     return out
 
 
+def _instagram_shortcode(url: str) -> Optional[str]:
+    """Extrai shortcode de URLs /p/{code}/, /reel/{code}/, /tv/{code}/."""
+    try:
+        parsed = urlparse(url)
+        m = re.match(r"^/(?:p|reel|tv|reels)/([A-Za-z0-9_-]+)", parsed.path)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return None
+
+
+async def _extract_instagram(url: str) -> dict:
+    """Scraping do endpoint /embed/captioned/ — público, sem auth.
+
+    Instagram pode quebrar isso a qualquer momento (não é API documentada).
+    Quando quebra, cai no placeholder com gradient colorido.
+    """
+    out: dict = {}
+    shortcode = _instagram_shortcode(url)
+    if not shortcode:
+        return out
+    embed_url = f"https://www.instagram.com/p/{shortcode}/embed/captioned/"
+    try:
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+            r = await client.get(
+                embed_url,
+                headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
+            )
+            if r.status_code != 200:
+                return out
+            page = r.text[:80000]
+
+        # OG image: o próprio frame do post hospedado no CDN do Instagram
+        m = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', page, re.I)
+        if m:
+            out["thumbnail"] = html.unescape(m.group(1).strip())
+
+        # OG title vem como "Username on Instagram: ..."
+        m = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']', page, re.I)
+        if m:
+            out["title"] = html.unescape(m.group(1).strip())[:200]
+
+        # Fallback: imagem dentro do embed quando OG falha
+        if not out.get("thumbnail"):
+            m = re.search(r'class="EmbeddedMediaImage"[^>]+src="([^"]+)"', page, re.I)
+            if m:
+                out["thumbnail"] = html.unescape(m.group(1).strip())
+    except Exception:
+        pass
+    return out
+
+
 async def _extract_vimeo(url: str) -> dict:
     """Vimeo: oEmbed retorna title + thumbnail_url (frame escolhido pelo dono)."""
     out: dict = {}
@@ -132,6 +186,10 @@ async def extract_metadata(url: str) -> dict:
         result.update(await _extract_vimeo(url))
         if result.get("title") and result.get("thumbnail"):
             return result
+    elif source_type == "instagram":
+        result.update(await _extract_instagram(url))
+        if result.get("title") and result.get("thumbnail"):
+            return result
 
     # Fallback: scrape OG tags
     try:
@@ -139,25 +197,25 @@ async def extract_metadata(url: str) -> dict:
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
             if resp.status_code != 200:
                 return result
-            html = resp.text[:50000]
+            html_text = resp.text[:50000]
 
         if not result.get("title"):
-            m = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
+            m = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']', html_text, re.I)
             if not m:
-                m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:title["\']', html, re.I)
+                m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:title["\']', html_text, re.I)
             if m:
-                result["title"] = m.group(1).strip()[:200]
+                result["title"] = html.unescape(m.group(1).strip())[:200]
             else:
-                m = re.search(r'<title[^>]*>([^<]+)</title>', html, re.I)
+                m = re.search(r'<title[^>]*>([^<]+)</title>', html_text, re.I)
                 if m:
-                    result["title"] = m.group(1).strip()[:200]
+                    result["title"] = html.unescape(m.group(1).strip())[:200]
 
         if not result.get("thumbnail"):
-            m = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
+            m = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html_text, re.I)
             if not m:
-                m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']', html, re.I)
+                m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']', html_text, re.I)
             if m:
-                result["thumbnail"] = m.group(1).strip()
+                result["thumbnail"] = html.unescape(m.group(1).strip())
 
     except Exception:
         pass

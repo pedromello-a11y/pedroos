@@ -22,8 +22,13 @@ from app.features.tasks.sse import broadcast
 from app.shared.dates import now_brt
 from app.shared.responses import format_task_created
 
-async def _handle_ref(text: str, db: AsyncSession) -> str:
-    """Handle 'ref: url' or 'ref board1 board2: url' from WhatsApp."""
+async def _handle_ref(text: str, db: AsyncSession, override_thumbnail: str | None = None) -> str:
+    """Handle 'ref: url' or 'ref board1 board2: url' from WhatsApp.
+
+    Se override_thumbnail for passado (caso de imageMessage do WhatsApp),
+    usa esse path em vez de tentar extrair do URL — Pedro forwardou um
+    post com a imagem anexada, é melhor thumb do que qualquer scraping.
+    """
     from app.features.refs.service import create_ref, extract_metadata
     from app.features.refs.schemas import RefCreate
 
@@ -33,7 +38,6 @@ async def _handle_ref(text: str, db: AsyncSession) -> str:
         boards: list[str] = []
         content = text[4:].strip()
     else:
-        # "ref transição typo: https://..."
         after_ref = text[4:].strip()
         colon_idx = after_ref.find(":")
         if colon_idx == -1:
@@ -59,12 +63,13 @@ async def _handle_ref(text: str, db: AsyncSession) -> str:
         note = content
 
     title = None
-    thumbnail = None
+    thumbnail = override_thumbnail
     source_type = None
     if url:
         meta = await extract_metadata(url)
         title = meta.get("title")
-        thumbnail = meta.get("thumbnail")
+        if not thumbnail:
+            thumbnail = meta.get("thumbnail")
         source_type = meta.get("source_type")
 
     data = RefCreate(
@@ -81,7 +86,8 @@ async def _handle_ref(text: str, db: AsyncSession) -> str:
 
     boards_str = " → " + ", ".join(f"#{b}" for b in boards) if boards else ""
     title_str = ref.title[:50] if ref.title else (url[:50] if url else "sem título")
-    return f"📎 Ref salva{boards_str}\n_{title_str}_"
+    extra = " (com thumb)" if override_thumbnail else ""
+    return f"📎 Ref salva{boards_str}{extra}\n_{title_str}_"
 
 
 _DUMP_TAGS = {
@@ -286,7 +292,24 @@ async def whatsapp_webhook(payload: dict, db: AsyncSession = Depends(get_db)):
 
     # ── ref: salva referência visual no vault ────────────────────────────
     if text.lower().startswith("ref:") or text.lower().startswith("ref "):
-        response_text = await _handle_ref(text, db)
+        # Se veio imagem anexada (Pedro forwardou post do IG/etc), salva e usa como thumb
+        override_thumb = None
+        image_b64 = payload.get("image_base64")
+        if image_b64:
+            import base64 as _b64, os as _os, uuid as _uuid
+            try:
+                from app.features.refs.router import UPLOADS_DIR
+                _os.makedirs(UPLOADS_DIR, exist_ok=True)
+                mimetype = payload.get("image_mimetype") or "image/jpeg"
+                ext = ".jpg" if "jpeg" in mimetype else ".png" if "png" in mimetype else ".jpg"
+                stored = f"wa_{_uuid.uuid4().hex[:12]}{ext}"
+                with open(_os.path.join(UPLOADS_DIR, stored), "wb") as f:
+                    f.write(_b64.b64decode(image_b64))
+                override_thumb = f"/uploads/{stored}"
+            except Exception as exc:
+                print(f"[wa-ref] erro salvando imagem: {exc}")
+
+        response_text = await _handle_ref(text, db, override_thumbnail=override_thumb)
         if from_jid:
             await send_whatsapp(from_jid, response_text)
         return {"ok": True, "response": response_text}

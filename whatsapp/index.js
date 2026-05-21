@@ -2,6 +2,7 @@ import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  downloadMediaMessage,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import qrcodeTerminal from "qrcode-terminal";
@@ -262,6 +263,37 @@ async function connect() {
           const jid = msg.key.remoteJid || "";
           const fromMe = msg.key.fromMe;
           const msgType = getMessageType(msg);
+
+          // Caso especial ANTES do filtro: imageMessage com URL na caption →
+          // salva como referência visual (Pedro forwardou um post de IG/etc)
+          if (msgType === "imageMessage" && jid.endsWith("@g.us") &&
+              (!alfredGroupJID || jid === alfredGroupJID)) {
+            const caption = msg.message?.imageMessage?.caption || "";
+            const urlMatch = caption.match(/https?:\/\/\S+/);
+            if (urlMatch) {
+              try {
+                const buffer = await downloadMediaMessage(msg, "buffer", {}, { logger });
+                const base64 = buffer.toString("base64");
+                const mimetype = msg.message.imageMessage.mimetype || "image/jpeg";
+                log(`📎 [alfred] imageMessage + URL → ref (${urlMatch[0].slice(0, 60)})`);
+                lastMessageAt = new Date().toISOString();
+                await axios.post(
+                  `${BACKEND_URL}/api/whatsapp/webhook`,
+                  {
+                    message_id: msg.key.id,
+                    from: jid,
+                    text: `ref: ${caption}`,
+                    image_base64: base64,
+                    image_mimetype: mimetype,
+                  },
+                  { timeout: 20_000 }
+                );
+              } catch (err) {
+                log(`[wa media] erro baixando/enviando: ${err.message}`);
+              }
+              continue;
+            }
+          }
 
           // 1. Skip system/bot message types
           if (msgType && IGNORED_MESSAGE_TYPES.has(msgType)) {
