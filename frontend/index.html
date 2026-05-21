@@ -1879,21 +1879,29 @@
               </div>
             </div>
 
-            <!-- Week blocks -->
-            <div class="relative flex gap-[5px]">
+            <!-- Week track -->
+            <div class="relative flex items-center gap-0 mt-1 mb-1">
+              <!-- Track line (background) -->
+              <div class="absolute left-2 right-2 h-[2px] rounded-full" style="background:rgba(255,255,255,0.03);top:50%;transform:translateY(-50%)"></div>
+
+              <!-- Day nodes -->
               <template x-for="day in getHabitWeekBlocks(habit)" :key="day.key">
-                <div @click="day.clickable && toggleHabitDayBlock(habit, day)"
-                  class="flex-1 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all duration-300 select-none"
-                  :class="day.clickable ? 'cursor-pointer active:scale-90' : ''"
-                  :style="habitBlockStyle(habit, day)"
-                  style="aspect-ratio: 1; min-height: 40px">
+                <div class="flex-1 flex flex-col items-center relative z-10"
+                  @click="day.clickable && toggleHabitDayBlock(habit, day)"
+                  :class="day.clickable ? 'cursor-pointer' : ''">
 
-                  <span class="text-sm leading-none font-bold"
-                    x-html="habitBlockIcon(day)"></span>
-
-                  <span class="text-[7px] font-bold uppercase tracking-wider leading-none"
-                    :class="day.is_today ? 'text-amber-400' : day.done ? 'text-emerald-400/50' : 'text-slate-700'"
+                  <!-- Day label (above) -->
+                  <span class="text-[8px] font-bold uppercase tracking-wider mb-1.5"
+                    :class="day.is_today ? 'text-white' : day.done ? 'text-emerald-400/60' : 'text-slate-700'"
                     x-text="day.label"></span>
+
+                  <!-- Node -->
+                  <div class="relative flex items-center justify-center transition-all duration-300"
+                    :class="day.done ? 'w-7 h-7 active:scale-90' : day.is_today && day.is_target ? 'w-7 h-7' : 'w-4 h-4'"
+                    :style="habitNodeStyle(habit, day)">
+                    <span x-show="day.done" class="text-[11px] font-bold text-emerald-300 leading-none">✓</span>
+                    <span x-show="day.is_today && day.is_target && !day.done" class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                  </div>
                 </div>
               </template>
             </div>
@@ -4094,28 +4102,20 @@ function pedroOS() {
       });
     },
 
-    habitBlockStyle(habit, day) {
+    habitNodeStyle(habit, day) {
       if (day.done) {
-        return 'background: linear-gradient(180deg, rgba(34,197,94,0.22), rgba(34,197,94,0.08)); border: 1px solid rgba(34,197,94,0.35); box-shadow: 0 2px 8px -2px rgba(34,197,94,0.2)';
+        return 'border-radius: 50%; background: rgba(34,197,94,0.2); border: 2px solid rgba(34,197,94,0.6); box-shadow: 0 0 8px -1px rgba(34,197,94,0.3)';
       }
       if (day.is_today && day.is_target) {
-        return 'background: rgba(251,191,36,0.06); border: 1.5px solid rgba(251,191,36,0.3); box-shadow: 0 0 10px -3px rgba(251,191,36,0.15)';
+        return 'border-radius: 50%; background: rgba(251,191,36,0.06); border: 2px solid rgba(251,191,36,0.4); box-shadow: 0 0 8px -2px rgba(251,191,36,0.2)';
       }
       if (day.is_past && day.is_target && !day.done) {
-        return 'background: rgba(100,116,139,0.04); border: 1px solid rgba(100,116,139,0.12)';
+        return 'border-radius: 50%; background: rgba(100,116,139,0.15); border: 1.5px solid rgba(100,116,139,0.2)';
       }
       if (day.is_future && day.is_target) {
-        return 'background: transparent; border: 1px dashed rgba(100,116,139,0.15)';
+        return 'border-radius: 50%; background: transparent; border: 1.5px dashed rgba(100,116,139,0.15)';
       }
-      return 'background: transparent; border: 1px solid transparent; opacity: 0.2';
-    },
-
-    habitBlockIcon(day) {
-      if (day.done) return '<span style="color:#4ade80">✓</span>';
-      if (day.is_today && day.is_target) return '<span style="color:#fbbf24" class="animate-pulse">•</span>';
-      if (day.is_past && day.is_target) return '<span style="color:#475569">–</span>';
-      if (day.is_future && day.is_target) return '<span style="color:#1e293b">·</span>';
-      return '';
+      return 'border-radius: 50%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.04); width: 8px !important; height: 8px !important';
     },
 
     get allHabitsComplete() {
