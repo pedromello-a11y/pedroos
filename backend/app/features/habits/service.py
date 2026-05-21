@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from app.features.habits.models import Habit, HabitLog, DayScore, PersonalRecord
-from app.features.habits.schemas import HabitCreate, HabitUpdate, DIFFICULTY_POINTS, HabitTodayItem
+from app.features.habits.schemas import HabitCreate, HabitUpdate, DIFFICULTY_POINTS, HabitTodayItem, HabitWeekDay
 from app.features.tasks.models import Task
 from app.shared.dates import now_brt, today_brt
 
@@ -18,11 +18,12 @@ def _week_start(d: date) -> date:
 
 async def _count_week_done(db: AsyncSession, habit_id: str, d: date) -> int:
     ws = _week_start(d)
+    we = ws + timedelta(days=6)
     result = await db.execute(
         select(func.count(HabitLog.id)).where(
             HabitLog.habit_id == habit_id,
             HabitLog.date >= ws.isoformat(),
-            HabitLog.date <= d.isoformat(),
+            HabitLog.date <= we.isoformat(),
             HabitLog.done == 1,
         )
     )
@@ -96,7 +97,6 @@ async def delete_habit(db: AsyncSession, habit_id: str) -> bool:
 
 
 async def propose_habit(db: AsyncSession, habit_id: str, d: date = None) -> Optional[HabitLog]:
-    """Propõe um hábito flex para o dia (ex: 'hoje vou correr')."""
     if d is None:
         d = today_brt()
     date_str = d.isoformat()
@@ -139,12 +139,11 @@ async def mark_habit(db: AsyncSession, habit_id: str, d: date = None, done: int 
 
     pts = _get_points(habit.difficulty)
 
-    # Weekly-target flex habits: append-mode (multiple logs per week allowed)
+    # Weekly-target flex habits
     if habit.weekly_target and habit.frequency == "flex":
         if done == 1:
             week_done = await _count_week_done(db, habit_id, d)
             if week_done >= habit.weekly_target:
-                # Already at target — return most recent log without creating new
                 last = await db.execute(
                     select(HabitLog).where(HabitLog.habit_id == habit_id, HabitLog.done == 1)
                     .order_by(HabitLog.created_at.desc()).limit(1)
@@ -162,16 +161,16 @@ async def mark_habit(db: AsyncSession, habit_id: str, d: date = None, done: int 
             await db.commit()
             await db.refresh(log)
             return log
-        else:  # uncheck: delete last done log of the week
-            ws = _week_start(d)
-            last = await db.execute(
+        else:
+            # Uncheck: find log for this specific date
+            existing = await db.execute(
                 select(HabitLog).where(
                     HabitLog.habit_id == habit_id,
-                    HabitLog.date >= ws.isoformat(),
+                    HabitLog.date == date_str,
                     HabitLog.done == 1,
-                ).order_by(HabitLog.created_at.desc()).limit(1)
+                )
             )
-            log = last.scalar_one_or_none()
+            log = existing.scalar_one_or_none()
             if log:
                 await db.delete(log)
                 await db.commit()
@@ -204,7 +203,6 @@ async def mark_habit(db: AsyncSession, habit_id: str, d: date = None, done: int 
 
 
 async def get_habit_streak(db: AsyncSession, habit_id: str, from_date: date = None) -> int:
-    """Calcula streak individual de um hábito (dias consecutivos feito)."""
     if from_date is None:
         from_date = today_brt()
 
@@ -230,6 +228,7 @@ async def get_habit_streak(db: AsyncSession, habit_id: str, from_date: date = No
                     streak += 1
                 else:
                     break
+            # flex: skip days with no log
         elif is_day:
             log_res = await db.execute(
                 select(HabitLog).where(HabitLog.habit_id == habit_id, HabitLog.date == d_str)
@@ -247,187 +246,31 @@ async def get_habit_streak(db: AsyncSession, habit_id: str, from_date: date = No
     return streak
 
 
-DAY_LABELS_PT = {"mon": "seg", "tue": "ter", "wed": "qua", "thu": "qui", "fri": "sex", "sat": "sáb", "sun": "dom"}
-WEEKDAY_PT = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+async def _get_habit_week_days(db: AsyncSession, habit: Habit, ref_date: date) -> list[HabitWeekDay]:
+    """Retorna 7 dias da semana (seg-dom) com status done para este hábito."""
+    monday = ref_date - timedelta(days=ref_date.weekday())
+    days = []
 
+    for i in range(7):
+        d = monday + timedelta(days=i)
+        d_str = d.isoformat()
 
-def _scheduled_target(habit: Habit) -> int:
-    """Quantos 'sucessos' compõem uma semana perfeita."""
-    if habit.frequency == "daily":
-        return 7
-    if habit.frequency == "flex":
-        return habit.weekly_target or 0
-    return len(_habit_days(habit.frequency))
-
-
-async def _compute_week_history(db: AsyncSession, habit: Habit, d: date, num_weeks: int = 4) -> list[float]:
-    """% done por semana (0.0–1.0), do mais antigo ao mais recente."""
-    target = _scheduled_target(habit)
-    if target <= 0:
-        return [0.0] * num_weeks
-    history: list[float] = []
-    for i in range(num_weeks - 1, -1, -1):
-        ws = _week_start(d) - timedelta(days=7 * i)
-        we = ws + timedelta(days=6)
-        res = await db.execute(
-            select(func.count(HabitLog.id)).where(
+        result = await db.execute(
+            select(HabitLog).where(
                 HabitLog.habit_id == habit.id,
-                HabitLog.date >= ws.isoformat(),
-                HabitLog.date <= we.isoformat(),
+                HabitLog.date == d_str,
                 HabitLog.done == 1,
             )
         )
-        done = res.scalar() or 0
-        history.append(round(min(1.0, done / target), 2))
-    return history
+        log = result.scalar_one_or_none()
 
+        days.append(HabitWeekDay(
+            date=d_str,
+            weekday=i,
+            done=bool(log),
+        ))
 
-async def _preferred_weekdays(db: AsyncSession, habit_id: str, d: date, lookback_days: int = 28) -> dict[int, int]:
-    """Quantas vezes (nos últimos N dias) o hábito foi feito em cada weekday (0-6)."""
-    from_d = d - timedelta(days=lookback_days)
-    res = await db.execute(
-        select(HabitLog.date).where(
-            HabitLog.habit_id == habit_id,
-            HabitLog.date >= from_d.isoformat(),
-            HabitLog.date <= d.isoformat(),
-            HabitLog.done == 1,
-        )
-    )
-    counts: dict[int, int] = {}
-    for (dstr,) in res.all():
-        try:
-            wd = date.fromisoformat(dstr).weekday()
-        except ValueError:
-            continue
-        counts[wd] = counts.get(wd, 0) + 1
-    return counts
-
-
-async def _compute_week_progress(db: AsyncSession, habit: Habit, d: date) -> list[dict]:
-    """Progresso semanal pra UI: list de {label, done, is_today, date, status}.
-
-    status: 'done' | 'today' | 'suggested' | 'missed' | 'future' | 'open'
-    """
-    ws = _week_start(d)
-    progress: list[dict] = []
-
-    if habit.frequency == "flex" and habit.weekly_target:
-        we = ws + timedelta(days=6)
-        res = await db.execute(
-            select(HabitLog).where(
-                HabitLog.habit_id == habit.id,
-                HabitLog.date >= ws.isoformat(),
-                HabitLog.date <= we.isoformat(),
-                HabitLog.done == 1,
-            ).order_by(HabitLog.date)
-        )
-        logs = list(res.scalars().all())
-
-        # Slot feito → mostra o dia em que foi feito
-        for log in logs:
-            try:
-                ld = date.fromisoformat(log.date)
-            except ValueError:
-                continue
-            progress.append({
-                "label": WEEKDAY_PT[ld.weekday()],
-                "done": True,
-                "is_today": ld == d,
-                "date": log.date,
-                "status": "done",
-            })
-
-        remaining = max(0, habit.weekly_target - len(logs))
-        today_done_already = any(
-            (lg.date == d.isoformat()) for lg in logs
-        )
-
-        # Slot sugerido (hoje) — se hoje for um dia preferido e ainda faltar slot
-        prefs = await _preferred_weekdays(db, habit.id, d)
-        if remaining > 0 and not today_done_already:
-            top_wds = sorted(prefs.items(), key=lambda x: -x[1])[:3]
-            top_wds_set = {wd for wd, _ in top_wds if _ > 0}
-            if d.weekday() in top_wds_set or not top_wds_set:
-                progress.append({
-                    "label": WEEKDAY_PT[d.weekday()],
-                    "done": False,
-                    "is_today": True,
-                    "date": d.isoformat(),
-                    "status": "suggested",
-                })
-                remaining -= 1
-
-        for _ in range(remaining):
-            progress.append({
-                "label": "—",
-                "done": False,
-                "is_today": False,
-                "date": None,
-                "status": "open",
-            })
-        return progress
-
-    if habit.frequency in ("daily", "flex"):
-        return progress
-
-    # Dias específicos tipo "mon,wed"
-    day_codes = [c.strip() for c in habit.frequency.split(",") if c.strip() in DAYS_MAP]
-    for code in day_codes:
-        day_date = ws + timedelta(days=DAYS_MAP[code])
-        log_res = await db.execute(
-            select(HabitLog).where(
-                HabitLog.habit_id == habit.id,
-                HabitLog.date == day_date.isoformat(),
-                HabitLog.done == 1,
-            ).order_by(HabitLog.created_at.desc()).limit(1)
-        )
-        log = log_res.scalar_one_or_none()
-        if log:
-            status = "done"
-        elif day_date == d:
-            status = "today"
-        elif day_date < d:
-            status = "missed"
-        else:
-            status = "future"
-        progress.append({
-            "label": DAY_LABELS_PT[code],
-            "done": log is not None,
-            "is_today": day_date == d,
-            "date": day_date.isoformat(),
-            "status": status,
-        })
-    return progress
-
-
-def _suggestion_text(habit: Habit, d: date, week_done: int, prefs: dict[int, int]) -> tuple[bool, Optional[str]]:
-    """(suggested_today, text). Texto curto e celebratório."""
-    target = _scheduled_target(habit)
-    if target == 0:
-        return False, None
-    if week_done >= target:
-        return False, None
-
-    # Hábitos de dias fixos
-    if habit.frequency not in ("flex", "daily"):
-        if _is_habit_day(habit, d):
-            return True, f"hoje é dia de {habit.name.lower()}"
-        return False, None
-
-    if habit.frequency == "daily":
-        return True, None
-
-    # Flex
-    today_wd = d.weekday()
-    today_count = prefs.get(today_wd, 0)
-    if today_count > 0:
-        return True, f"você costuma fazer na {WEEKDAY_PT[today_wd]} ({today_count}x nas últimas 4 semanas)"
-    # Sem preferência ainda: sugere hoje mesmo
-    if not prefs:
-        return True, "registre quando fizer — vou aprender seus dias"
-    # Tem preferência mas hoje não é dela
-    top_wd = max(prefs.items(), key=lambda x: x[1])[0]
-    return False, f"melhor dia: {WEEKDAY_PT[top_wd]}"
+    return days
 
 
 async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTodayItem]:
@@ -444,19 +287,14 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
 
         log_result = await db.execute(
             select(HabitLog).where(HabitLog.habit_id == habit.id, HabitLog.date == date_str)
-            .order_by(HabitLog.created_at.desc()).limit(1)
         )
         log = log_result.scalar_one_or_none()
 
-        week_progress = await _compute_week_progress(db, habit, d)
-        week_history = await _compute_week_history(db, habit, d)
-        week_target = _scheduled_target(habit)
-        prefs = await _preferred_weekdays(db, habit.id, d) if habit.frequency == "flex" else {}
+        week_days = await _get_habit_week_days(db, habit, d)
 
         if habit.frequency == "flex" and habit.weekly_target:
             week_done = await _count_week_done(db, habit.id, d)
-            suggested, suggestion = _suggestion_text(habit, d, week_done, prefs)
-            perfect = week_done >= habit.weekly_target
+            streak = await get_habit_streak(db, habit.id, d - timedelta(days=1))
             result.append(HabitTodayItem(
                 habit_id=habit.id,
                 name=habit.name,
@@ -467,20 +305,16 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
                 week_done=week_done,
                 points_done=pts["done"],
                 points_missed=abs(pts["missed"]),
-                done=1 if perfect else 0,
+                done=1 if week_done >= habit.weekly_target else 0,
                 proposed=True,
-                streak=0,
-                week_progress=week_progress,
-                week_history=week_history,
-                week_target=week_target,
-                week_done_count=week_done,
-                is_perfect_week=perfect,
-                suggested_today=suggested,
-                suggestion_text=suggestion,
+                streak=streak,
+                is_today_habit=True,
+                week_days=week_days,
             ))
             continue
 
         if habit.frequency == "flex" and not log:
+            streak = await get_habit_streak(db, habit.id, d - timedelta(days=1))
             result.append(HabitTodayItem(
                 habit_id=habit.id,
                 name=habit.name,
@@ -491,33 +325,13 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
                 points_missed=abs(pts["missed"]),
                 done=0,
                 proposed=False,
-                streak=await get_habit_streak(db, habit.id, d - timedelta(days=1)),
-                week_progress=week_progress,
-                week_history=week_history,
-                week_target=week_target,
-                week_done_count=0,
-                is_perfect_week=False,
-                suggested_today=False,
-                suggestion_text=None,
+                streak=streak,
+                is_today_habit=False,
+                week_days=week_days,
             ))
             continue
 
         streak = await get_habit_streak(db, habit.id, d - timedelta(days=1))
-
-        # Conta done na semana pra detectar semana perfeita
-        ws = _week_start(d)
-        we = ws + timedelta(days=6)
-        wk_res = await db.execute(
-            select(func.count(HabitLog.id)).where(
-                HabitLog.habit_id == habit.id,
-                HabitLog.date >= ws.isoformat(),
-                HabitLog.date <= we.isoformat(),
-                HabitLog.done == 1,
-            )
-        )
-        week_done_count = wk_res.scalar() or 0
-        perfect = week_target > 0 and week_done_count >= week_target
-        suggested, suggestion = _suggestion_text(habit, d, week_done_count, prefs)
 
         result.append(HabitTodayItem(
             habit_id=habit.id,
@@ -528,17 +342,79 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
             points_done=pts["done"],
             points_missed=abs(pts["missed"]),
             done=log.done if log else 0,
-            proposed=is_day,
-            is_today_habit=is_day,
+            proposed=True,
             streak=streak + (1 if log and log.done else 0),
-            week_progress=week_progress,
-            week_history=week_history,
-            week_target=week_target,
-            week_done_count=week_done_count,
-            is_perfect_week=perfect,
-            suggested_today=suggested,
-            suggestion_text=suggestion,
+            is_today_habit=is_day or bool(log),
+            week_days=week_days,
         ))
+
+    return result
+
+
+async def get_habit_history(db: AsyncSession, weeks: int = 4) -> list[dict]:
+    """Retorna % de completude por semana nos últimos N weeks."""
+    today = today_brt()
+    habits = await list_habits(db, active_only=True)
+    if not habits:
+        return []
+
+    result = []
+
+    for w in range(weeks - 1, -1, -1):
+        week_start = today - timedelta(days=today.weekday() + (w * 7))
+        week_end = week_start + timedelta(days=6)
+
+        total_expected = 0
+        total_done = 0
+
+        for habit in habits:
+            target_days = _habit_days(habit.frequency)
+
+            if habit.frequency == "flex" and habit.weekly_target:
+                total_expected += habit.weekly_target
+                for i in range(7):
+                    d = week_start + timedelta(days=i)
+                    if d > today:
+                        break
+                    d_str = d.isoformat()
+                    res = await db.execute(
+                        select(HabitLog).where(
+                            HabitLog.habit_id == habit.id,
+                            HabitLog.date == d_str,
+                            HabitLog.done == 1,
+                        )
+                    )
+                    if res.scalar_one_or_none():
+                        total_done += 1
+            elif habit.frequency != "flex":
+                for i in range(7):
+                    d = week_start + timedelta(days=i)
+                    if d > today:
+                        break
+                    if d.weekday() in target_days:
+                        total_expected += 1
+                        d_str = d.isoformat()
+                        res = await db.execute(
+                            select(HabitLog).where(
+                                HabitLog.habit_id == habit.id,
+                                HabitLog.date == d_str,
+                                HabitLog.done == 1,
+                            )
+                        )
+                        if res.scalar_one_or_none():
+                            total_done += 1
+
+        pct = int((total_done / total_expected) * 100) if total_expected > 0 else 0
+        is_current = w == 0
+
+        result.append({
+            "label": "atual" if is_current else f"sem -{w}",
+            "week_start": week_start.isoformat(),
+            "expected": total_expected,
+            "done": total_done,
+            "pct": pct,
+            "is_current": is_current,
+        })
 
     return result
 
@@ -711,7 +587,6 @@ async def get_today_status(db: AsyncSession) -> dict:
 
     habits = await get_habits_for_date(db, today)
 
-    # Extrair valores de score ANTES de qualquer commit adicional (evita MissingGreenlet em async)
     s_streak = score.streak
     s_tasks_proposed = score.tasks_proposed
     s_tasks_done = score.tasks_done
@@ -721,7 +596,6 @@ async def get_today_status(db: AsyncSession) -> dict:
     s_points_lost = score.points_lost
     s_grade = score.grade or "neutral"
 
-    # Conta ações individuais: cada check conta pro combo (não só meta semanal completa)
     habit_actions = sum(1 for h in habits if h.done or h.week_done > 0)
     combo = _compute_combo(s_tasks_done, habit_actions)
     new_records = await _check_and_update_records(db, today, score, combo)

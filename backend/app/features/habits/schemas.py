@@ -11,7 +11,7 @@ DIFFICULTY_POINTS = {
 class HabitCreate(BaseModel):
     name: str
     icon: str = "⭐"
-    frequency: str = "daily"  # "daily", "mon,wed,fri", "tue,thu", "flex"
+    frequency: str = "daily"
     difficulty: int = 2
     weekly_target: Optional[int] = None
 
@@ -81,6 +81,12 @@ class DayScoreResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class HabitWeekDay(BaseModel):
+    date: str
+    weekday: int
+    done: bool
+
+
 class HabitTodayItem(BaseModel):
     habit_id: str
     name: str
@@ -91,17 +97,11 @@ class HabitTodayItem(BaseModel):
     week_done: int = 0
     points_done: int
     points_missed: int
-    done: int        # 0=pendente, 1=feito
-    proposed: bool   # True se é dia deste hábito ou foi proposto manualmente
-    is_today_habit: bool = True  # False = não é dia agendado hoje (mas mostra na semana)
+    done: int
+    proposed: bool
     streak: int
-    week_progress: List[dict] = []  # [{label, done, is_today, date, status}]
-    week_history: List[float] = []  # últimas 4 semanas, % done 0-1, mais antigo→recente
-    week_target: int = 0  # quantos dias é "semana perfeita"
-    week_done_count: int = 0  # já feitos essa semana
-    is_perfect_week: bool = False
-    suggested_today: bool = False  # frontend destaca chip de hoje
-    suggestion_text: Optional[str] = None  # texto curto explicando sugestão
+    is_today_habit: bool = True
+    week_days: List[HabitWeekDay] = []
 
 
 class TodayStatus(BaseModel):

@@ -1751,209 +1751,197 @@
       </div>
     </div>
 
-    <!-- MOMENTUM (só no contexto pessoal) -->
-    <div x-show="context === 'personal'" class="pb-5 relative overflow-hidden rounded-2xl"
-      :class="{ 'frenzy-glow': momentum.combo?.is_frenzy }"
-      style="border-bottom:1px solid var(--border)">
+    <!-- ═══ MOMENTUM + HÁBITOS (Glow Blocks) ═══════════════════════════════ -->
+    <div x-show="context === 'personal'" class="space-y-4">
 
-      <!-- Streak (só chamas, sem número) + frenzy badge -->
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-0.5" :title="momentum.streak + ' dias seguidos'">
-          <template x-for="(f, i) in [...streakFlames()]" :key="i">
-            <span class="streak-flame text-2xl leading-none" x-text="f"></span>
-          </template>
+      <!-- Streak + Points header -->
+      <div class="flex items-end justify-between pb-3" style="border-bottom:1px solid var(--border)">
+        <div class="flex items-baseline gap-2.5">
+          <span class="text-2xl leading-none">🔥</span>
+          <span class="text-3xl font-black text-white leading-none font-mono" x-text="momentum.streak"></span>
+          <span class="text-[9px] text-slate-600 font-bold uppercase tracking-wider self-end pb-0.5">dias</span>
         </div>
-        <div x-show="momentum.combo?.is_frenzy"
-          class="flex items-center gap-1 px-2.5 py-1 rounded-full frenzy-shimmer"
-          style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3)">
-          <span class="text-xs font-black text-red-400 uppercase tracking-wider">Frenzy</span>
-        </div>
-      </div>
-
-      <!-- Energy bar -->
-      <div class="mb-3">
-        <div class="energy-bar"
-          :class="{
-            'energy-cold': energyLevel() === 'cold',
-            'energy-warm': energyLevel() === 'warm',
-            'energy-hot': energyLevel() === 'hot',
-            'energy-fire': energyLevel() === 'fire',
-          }">
-          <div class="energy-bar-fill" :style="'width:' + energyWidth()"></div>
+        <div class="text-right leading-tight">
+          <p class="font-mono text-sm">
+            <span class="font-bold" :class="momentum.today_points >= 0 ? 'text-emerald-400' : 'text-red-400'"
+              x-text="(momentum.today_points >= 0 ? '+' : '') + momentum.today_points"></span>
+            <span class="text-slate-700 text-[10px] ml-0.5">pts</span>
+          </p>
+          <p class="text-[10px] text-slate-600 font-mono mt-0.5" x-text="momentum.total_points + ' total'"></p>
         </div>
       </div>
 
-      <!-- Combo dots + until frenzy hint -->
-      <div class="flex items-center justify-between mb-4">
-        <div class="combo-track">
-          <template x-for="(dot, i) in comboDots()" :key="i">
-            <div class="combo-dot"
-              :class="{
-                'combo-dot-active': dot.active && !dot.isFrenzy,
-                'combo-dot-frenzy': dot.isFrenzy,
-              }"
-              :style="dot.active ? 'background:' + dot.color + ';box-shadow:0 0 4px ' + dot.color : 'background:' + dot.inactiveColor + ';opacity:0.55'"></div>
-          </template>
-        </div>
-        <span x-show="momentum.combo?.until_frenzy > 0 && (momentum.combo?.current_position || 0) >= 3"
-          class="text-[9px] text-slate-600 font-mono"
-          x-text="'+' + momentum.combo?.until_frenzy + ' pro frenzy'"></span>
-      </div>
-
-      <!-- Week dots -->
-      <div class="flex justify-between mb-5 px-1">
+      <!-- Week dots (day score) -->
+      <div class="flex gap-1 justify-between px-1">
         <template x-for="day in momentum.week" :key="day.date">
-          <div class="flex flex-col items-center gap-2">
-            <span class="text-[9px] font-bold uppercase tracking-wider"
-              :class="day.is_today ? 'text-white' : 'text-slate-600'"
+          <div class="flex flex-col items-center gap-1.5">
+            <span class="text-[8px] font-bold uppercase tracking-wider"
+              :class="day.is_today ? 'text-white' : 'text-slate-700'"
               x-text="day.day"></span>
-            <div class="week-dot"
+            <span class="w-2.5 h-2.5 rounded-full transition-all"
+              :style="day.is_today ? 'background:#fff;box-shadow:0 0 6px rgba(255,255,255,0.5)' : ''"
               :class="{
-                'week-dot-good': day.grade === 'good',
-                'week-dot-neutral': day.grade === 'neutral',
-                'week-dot-bad': day.grade === 'bad',
-                'week-dot-empty': !day.grade,
-                'week-dot-today': day.is_today,
-              }"></div>
+                'bg-emerald-400': !day.is_today && day.grade === 'good',
+                'bg-yellow-400/60': !day.is_today && day.grade === 'neutral',
+                'bg-red-400/50': !day.is_today && day.grade === 'bad',
+                'bg-slate-800': !day.is_today && !day.grade
+              }"></span>
           </div>
         </template>
       </div>
 
-      <!-- Habits header -->
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Hábitos</span>
-        <div class="flex items-center gap-3">
+      <!-- Progress bar today -->
+      <div class="h-1 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.03)">
+        <div class="h-full rounded-full transition-all duration-700"
+          :style="`width:${momentum.completion_pct}%;background:${
+            momentum.completion_pct >= 70 ? 'linear-gradient(90deg, #22C55E, #10B981)'
+            : momentum.completion_pct >= 40 ? 'linear-gradient(90deg, #FBBF24, #F59E0B)'
+            : 'linear-gradient(90deg, #475569, #64748B)'
+          }`"></div>
+      </div>
+
+      <!-- Section header -->
+      <div class="flex items-center justify-between pt-1">
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Hábitos</span>
+          <span x-show="allHabitsComplete"
+            class="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+            style="background: linear-gradient(135deg, rgba(251,191,36,0.15), rgba(234,179,8,0.08));
+                   color: #FBBF24; border: 1px solid rgba(251,191,36,0.25)">
+            ✦ perfeita
+          </span>
+        </div>
+        <div class="flex items-center gap-2">
           <button @click="showManageHabits = !showManageHabits"
             class="text-[10px] transition-colors"
-            :class="showManageHabits ? 'text-cyan-400' : 'text-slate-600 hover:text-slate-300'">gerenciar</button>
+            :class="showManageHabits ? 'text-cyan-400' : 'text-slate-700 hover:text-slate-400'">⚙</button>
           <button @click="showHabitModal = true"
-            class="text-[10px] text-slate-600 hover:text-slate-300 transition-colors font-bold">+ novo</button>
+            class="text-[10px] text-slate-700 hover:text-slate-400 transition-colors">+</button>
         </div>
       </div>
 
-      <!-- Gerenciar: lista de TODOS os hábitos com delete -->
-      <div x-show="showManageHabits" class="flex flex-col gap-1 mb-3 p-2 rounded-xl" style="background:rgba(255,255,255,0.03);border:1px solid var(--border)">
+      <!-- Manage list -->
+      <div x-show="showManageHabits" class="flex flex-col gap-1 p-2 rounded-xl" style="background:rgba(255,255,255,0.02);border:1px solid var(--border)">
         <template x-for="habit in habits" :key="habit.id">
           <div class="flex items-center gap-2 py-0.5">
             <span class="text-sm leading-none shrink-0" x-text="habit.icon || '⭐'"></span>
             <span class="flex-1 text-xs text-slate-300 min-w-0 truncate" x-text="habit.name"></span>
             <span class="text-[9px] text-slate-600 shrink-0 font-mono" x-text="habit.frequency"></span>
-            <template x-if="habit.weekly_target">
-              <span class="text-[9px] px-1 rounded shrink-0" style="background:rgba(139,92,246,0.15);color:#a78bfa">
-                <span x-text="habit.weekly_target + 'x/sem'"></span>
-              </span>
-            </template>
             <button @click="deleteHabit(habit.id)"
               class="text-slate-700 hover:text-red-400 text-sm leading-none transition-colors shrink-0 px-1">×</button>
           </div>
         </template>
-        <div x-show="habits.length === 0" class="text-xs text-slate-700 italic py-1">Nenhum hábito cadastrado</div>
+        <div x-show="habits.length === 0" class="text-xs text-slate-700 italic py-1">Nenhum hábito</div>
       </div>
 
-      <!-- Habit cards (todos iguais, celebração de semana perfeita) -->
-      <div x-show="!showManageHabits" class="flex flex-col gap-2">
+      <!-- ── Habit Cards (Glow Blocks) ────────────────────────────────── -->
+      <div x-show="!showManageHabits" class="space-y-3">
         <template x-for="habit in momentum.habits" :key="habit.habit_id">
-          <div class="habit-card" :class="habit.is_perfect_week ? 'habit-card-perfect' : ''">
-            <!-- Header: ícone, nome, streak, badge da semana -->
-            <div class="flex items-center gap-2">
-              <span class="text-base shrink-0" x-text="habit.icon || '⭐'"></span>
-              <div class="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
-                <span class="text-sm font-medium text-slate-100 truncate" x-text="habit.name"></span>
-                <span x-show="habit.frequency === 'flex'" class="text-[9px] text-slate-500 font-mono uppercase tracking-wider">
-                  flex <span x-text="habit.weekly_target + 'x'"></span>
-                </span>
-                <span x-show="habit.streak >= 2" class="habit-streak-fire"
-                  x-text="'🔥' + habit.streak"></span>
+          <div class="relative rounded-2xl p-4 overflow-hidden transition-all duration-500"
+            :style="habitCardBg(habit)">
+
+            <!-- Glow layer -->
+            <div x-show="isHabitWeekComplete(habit)"
+              class="absolute inset-0 pointer-events-none"
+              style="background: radial-gradient(ellipse at 20% 50%, rgba(34,197,94,0.12), transparent 70%);opacity:0.7"></div>
+
+            <!-- Header row -->
+            <div class="relative flex items-center gap-3 mb-3">
+              <!-- Ring progress -->
+              <div class="relative w-10 h-10 flex items-center justify-center shrink-0">
+                <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r="16" fill="none"
+                    stroke="rgba(255,255,255,0.04)" stroke-width="3"/>
+                  <circle cx="20" cy="20" r="16" fill="none"
+                    :stroke="isHabitWeekComplete(habit) ? '#22C55E' : habitWeekPct(habit) >= 50 ? '#FBBF24' : '#334155'"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                    :stroke-dasharray="100.5"
+                    :stroke-dashoffset="100.5 - (100.5 * habitWeekPct(habit) / 100)"
+                    style="transition: stroke-dashoffset 0.7s ease"/>
+                </svg>
+                <span class="text-lg leading-none relative z-10" x-text="habit.icon || '⭐'"></span>
               </div>
-              <!-- Badge X/Y -->
-              <span class="habit-week-badge shrink-0"
-                :class="{
-                  'habit-week-badge-perfect': habit.is_perfect_week,
-                  'habit-week-badge-partial': !habit.is_perfect_week && habit.week_done_count > 0,
-                  'habit-week-badge-empty': habit.week_done_count === 0
-                }">
-                <span x-text="habit.week_done_count + '/' + habit.week_target"></span>
-                <span x-show="habit.is_perfect_week"> 🏆</span>
-              </span>
+
+              <!-- Name + freq -->
+              <div class="flex-1 min-w-0">
+                <p class="text-[13px] font-semibold text-slate-200 truncate" x-text="habit.name"></p>
+                <p class="text-[10px] text-slate-600 mt-0.5" x-text="habitFreqLabel(habit)"></p>
+              </div>
+
+              <!-- Score -->
+              <div class="shrink-0 text-right">
+                <p class="text-lg font-black font-mono leading-none"
+                  :class="isHabitWeekComplete(habit) ? 'text-emerald-400' : habitWeekPct(habit) >= 50 ? 'text-amber-300' : 'text-slate-600'"
+                  x-text="habitScoreText(habit)"></p>
+                <p x-show="isHabitWeekComplete(habit)"
+                  class="text-[9px] font-bold text-emerald-500/80 mt-0.5 uppercase tracking-wider">completo</p>
+              </div>
             </div>
 
-            <!-- Chips de dia (semana inteira visível) -->
-            <div x-show="habit.week_progress && habit.week_progress.length" class="flex items-center gap-1.5 mt-2.5 flex-wrap">
-              <template x-for="(p, i) in (habit.week_progress || [])" :key="i">
-                <div class="habit-day-chip"
-                  :class="{
-                    'habit-day-chip-done': p.status === 'done',
-                    'habit-day-chip-suggested': p.status === 'suggested' || (p.status === 'today' && !p.done),
-                    'habit-day-chip-today': p.status === 'today' && p.done,
-                    'habit-day-chip-missed': p.status === 'missed',
-                    'habit-day-chip-future': p.status === 'future',
-                    'habit-day-chip-open': p.status === 'open'
-                  }"
-                  :title="
-                    p.status === 'done' ? 'Feito — clique pra desmarcar' :
-                    p.status === 'suggested' ? 'Sugerido hoje — clique pra marcar' :
-                    p.status === 'today' ? 'Hoje — clique pra marcar' :
-                    p.status === 'missed' ? 'Não feito — clique pra marcar' :
-                    p.status === 'future' ? 'Próximo' : 'Slot disponível'
-                  "
-                  @click="(p.date && p.status !== 'future' && p.status !== 'open') ? toggleHabitDay(habit, p) : (p.status === 'open' && habit.frequency === 'flex' ? proposeAndCheck(habit) : null)">
-                  <span x-text="p.label || '·'"></span>
-                  <span x-show="p.status === 'done'" class="habit-day-chip-check">✓</span>
-                  <span x-show="p.status === 'suggested' || (p.status === 'today' && !p.done)" class="habit-day-chip-check">💡</span>
+            <!-- Week blocks -->
+            <div class="relative flex gap-[5px]">
+              <template x-for="day in getHabitWeekBlocks(habit)" :key="day.key">
+                <div @click="day.clickable && toggleHabitDayBlock(habit, day)"
+                  class="flex-1 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all duration-300 select-none"
+                  :class="day.clickable ? 'cursor-pointer active:scale-90' : ''"
+                  :style="habitBlockStyle(habit, day)"
+                  style="aspect-ratio: 1; min-height: 40px">
+
+                  <span class="text-sm leading-none font-bold"
+                    x-html="habitBlockIcon(day)"></span>
+
+                  <span class="text-[7px] font-bold uppercase tracking-wider leading-none"
+                    :class="day.is_today ? 'text-amber-400' : day.done ? 'text-emerald-400/50' : 'text-slate-700'"
+                    x-text="day.label"></span>
                 </div>
               </template>
             </div>
 
-            <!-- Sugestão + sparkline -->
-            <div class="flex items-end justify-between gap-2 mt-2">
-              <div class="flex-1 min-w-0">
-                <div x-show="habit.suggestion_text" class="text-[10px] text-amber-300/80 leading-tight"
-                  x-text="'💡 ' + habit.suggestion_text"></div>
-                <div x-show="habit.is_perfect_week" class="text-[10px] text-amber-300 font-medium leading-tight">
-                  🏆 Semana perfeita
-                </div>
-              </div>
-              <!-- Sparkline 4 semanas -->
-              <div x-show="habit.week_history && habit.week_history.length"
-                class="habit-sparkline shrink-0"
-                :title="'Últimas 4 semanas — mais antiga → atual'">
-                <template x-for="(pct, idx) in (habit.week_history || [])" :key="idx">
-                  <span class="habit-sparkline-bar"
-                    :class="pct === 0 ? 'habit-sparkline-bar-empty' : ''"
-                    :style="'height:' + Math.max(2, pct * 14) + 'px;' + (pct >= 1 ? 'background:#fbbf24' : (pct >= 0.5 ? 'background:rgba(16,185,129,0.85)' : 'background:rgba(16,185,129,0.45)'))"></span>
-                </template>
-              </div>
+            <!-- Streak -->
+            <div x-show="habit.streak > 1" class="flex items-center gap-1.5 mt-2.5 pl-1">
+              <span class="text-[10px]">🔥</span>
+              <span class="text-[10px] text-slate-600 font-mono" x-text="habit.streak + ' seguidos'"></span>
             </div>
           </div>
         </template>
-        <button x-show="momentum.habits.length === 0"
+
+        <!-- Empty state -->
+        <button x-show="!momentum.habits || momentum.habits.length === 0"
           @click="showHabitModal = true"
-          class="text-xs text-slate-600 hover:text-cyan-400 italic text-left transition-colors py-1">
-          Criar primeiro hábito →
+          class="w-full text-center text-xs text-slate-600 hover:text-cyan-400 italic py-4 transition-colors rounded-xl"
+          style="border: 1px dashed var(--border)">
+          + Criar primeiro hábito
         </button>
       </div>
 
-      <!-- Records flash -->
-      <template x-for="rec in (momentum.new_records || [])" :key="rec.record_type">
-        <div class="mt-3 px-3 py-2 rounded-xl record-flash flex items-center gap-2"
-          style="border:1px solid var(--border)">
-          <span class="text-base">🏆</span>
-          <span class="text-xs font-bold text-amber-300"
-            x-text="{
-              'max_tasks_day': 'Novo record — melhor dia!',
-              'max_combo': 'Novo record — maior combo!',
-              'max_streak': 'Novo record — maior streak!',
-            }[rec.record_type] || 'Novo record!'"></span>
+      <!-- ── Tendência (mini heatmap) ─────────────────────────────────── -->
+      <div x-show="habitHistory.length > 0" class="pt-2">
+        <p class="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-700 mb-2">Tendência</p>
+        <div class="flex gap-1.5">
+          <template x-for="week in habitHistory" :key="week.label">
+            <div class="flex-1 flex flex-col items-center gap-1">
+              <div class="w-full rounded-lg transition-all duration-300"
+                style="height: 28px"
+                :style="`background: ${
+                  week.pct >= 100 ? 'linear-gradient(180deg, rgba(34,197,94,0.35), rgba(34,197,94,0.1))'
+                  : week.pct >= 75 ? 'linear-gradient(180deg, rgba(34,197,94,0.18), rgba(34,197,94,0.06))'
+                  : week.pct >= 50 ? 'linear-gradient(180deg, rgba(251,191,36,0.18), rgba(251,191,36,0.06))'
+                  : week.pct > 0 ? 'rgba(100,116,139,0.06)'
+                  : 'rgba(255,255,255,0.015)'
+                }; border: 1px solid ${
+                  week.pct >= 100 ? 'rgba(34,197,94,0.25)'
+                  : week.pct >= 50 ? 'rgba(251,191,36,0.12)'
+                  : 'rgba(255,255,255,0.03)'
+                }`"></div>
+              <span class="text-[8px] font-mono"
+                :class="week.is_current ? 'text-slate-500' : week.pct >= 100 ? 'text-emerald-500' : 'text-slate-700'"
+                x-text="week.is_current ? 'now' : week.pct >= 100 ? '✓' : week.pct > 0 ? week.pct + '%' : ''"></span>
+            </div>
+          </template>
         </div>
-      </template>
+      </div>
 
-      <!-- Milestones -->
-      <template x-for="m in (momentum.milestones || [])" :key="m">
-        <div class="mt-2 px-3 py-2 rounded-xl flex items-center gap-2 record-flash"
-          style="border:1px solid rgba(168,85,247,0.2);background:rgba(168,85,247,0.05)">
-          <span class="text-xs font-bold text-purple-300" x-text="m"></span>
-        </div>
-      </template>
     </div>
 
     <!-- OVERDUE -->
@@ -2718,6 +2706,7 @@ function pedroOS() {
     _pendingJiraKey: null,
     toasts: [],
     todayStr: new Date().toISOString().split('T')[0],
+    habitHistory: [],
     _blDragItem: null,
     _blDragSourceGroup: null,
     _blDragOver: null,
@@ -3892,6 +3881,7 @@ function pedroOS() {
     async loadMomentum() {
       const res = await this.api('/api/habits/today');
       if (res && !res._error) this.momentum = res;
+      await this.loadHabitHistory();
     },
 
     energyLevel() {
@@ -4006,6 +3996,141 @@ function pedroOS() {
       await this.api(`/api/habits/${id}`, 'DELETE');
       await this.loadHabits();
       await this.loadMomentum();
+    },
+
+    // ═══ HABIT GLOW BLOCKS — helpers ═══════════════════════════════════════
+
+    async loadHabitHistory() {
+      try {
+        const res = await fetch('/api/habits/history?weeks=4');
+        if (res.ok) this.habitHistory = await res.json();
+      } catch(e) { console.warn('loadHabitHistory error', e); }
+    },
+
+    habitCardBg(habit) {
+      if (this.isHabitWeekComplete(habit)) {
+        return 'background: linear-gradient(135deg, rgba(34,197,94,0.04), rgba(16,185,129,0.02)); border: 1px solid rgba(34,197,94,0.18); box-shadow: 0 0 24px -8px rgba(34,197,94,0.12)';
+      }
+      return 'background: var(--card); border: 1px solid var(--border)';
+    },
+
+    isHabitWeekComplete(habit) {
+      if (habit.weekly_target) return (habit.week_done || 0) >= habit.weekly_target;
+      const blocks = this.getHabitWeekBlocks(habit);
+      const targetPast = blocks.filter(d => d.is_target && (d.is_past || d.is_today));
+      if (targetPast.length === 0) return false;
+      return targetPast.every(d => d.done);
+    },
+
+    habitWeekPct(habit) {
+      if (habit.weekly_target) {
+        return Math.min(100, Math.round(((habit.week_done || 0) / habit.weekly_target) * 100));
+      }
+      const blocks = this.getHabitWeekBlocks(habit);
+      const targetDays = blocks.filter(d => d.is_target);
+      if (targetDays.length === 0) return 0;
+      const done = targetDays.filter(d => d.done).length;
+      return Math.round((done / targetDays.length) * 100);
+    },
+
+    habitScoreText(habit) {
+      if (habit.weekly_target) return `${habit.week_done || 0}/${habit.weekly_target}`;
+      const blocks = this.getHabitWeekBlocks(habit);
+      const target = blocks.filter(d => d.is_target);
+      const done = target.filter(d => d.done).length;
+      return `${done}/${target.length}`;
+    },
+
+    habitFreqLabel(habit) {
+      const map = { mon:'seg', tue:'ter', wed:'qua', thu:'qui', fri:'sex', sat:'sáb', sun:'dom' };
+      if (habit.frequency === 'daily') return 'todos os dias';
+      if (habit.frequency === 'flex') return `flex · ${habit.weekly_target || '?'}x semana`;
+      return habit.frequency.split(',').map(d => map[d.trim()] || d).join(' · ');
+    },
+
+    getHabitWeekBlocks(habit) {
+      const labels = ['S','T','Q','Q','S','S','D'];
+      const dayMap = { mon:0, tue:1, wed:2, thu:3, fri:4, sat:5, sun:6 };
+      const weekDays = habit.week_days || [];
+
+      let targetIndices;
+      if (habit.frequency === 'daily') {
+        targetIndices = [0,1,2,3,4,5,6];
+      } else if (habit.frequency === 'flex') {
+        targetIndices = [0,1,2,3,4,5,6];
+      } else {
+        targetIndices = habit.frequency.split(',').map(d => dayMap[d.trim()]).filter(x => x !== undefined);
+      }
+
+      const today = new Date();
+      const dow = (today.getDay() + 6) % 7;
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - dow);
+      monday.setHours(0,0,0,0);
+
+      return labels.map((label, i) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const dateStr = d.toISOString().slice(0, 10);
+        const isToday = dateStr === this.todayStr;
+        const isPast = dateStr < this.todayStr;
+        const isFuture = dateStr > this.todayStr;
+        const isTarget = targetIndices.includes(i);
+        const dayData = weekDays.find(wd => wd.date === dateStr);
+        const done = !!(dayData && dayData.done);
+
+        return {
+          key: `${habit.habit_id}-${i}`,
+          label,
+          date: dateStr,
+          weekday: i,
+          is_today: isToday,
+          is_past: isPast,
+          is_future: isFuture,
+          is_target: isTarget,
+          done,
+          clickable: isTarget && (isPast || isToday),
+        };
+      });
+    },
+
+    habitBlockStyle(habit, day) {
+      if (day.done) {
+        return 'background: linear-gradient(180deg, rgba(34,197,94,0.22), rgba(34,197,94,0.08)); border: 1px solid rgba(34,197,94,0.35); box-shadow: 0 2px 8px -2px rgba(34,197,94,0.2)';
+      }
+      if (day.is_today && day.is_target) {
+        return 'background: rgba(251,191,36,0.06); border: 1.5px solid rgba(251,191,36,0.3); box-shadow: 0 0 10px -3px rgba(251,191,36,0.15)';
+      }
+      if (day.is_past && day.is_target && !day.done) {
+        return 'background: rgba(100,116,139,0.04); border: 1px solid rgba(100,116,139,0.12)';
+      }
+      if (day.is_future && day.is_target) {
+        return 'background: transparent; border: 1px dashed rgba(100,116,139,0.15)';
+      }
+      return 'background: transparent; border: 1px solid transparent; opacity: 0.2';
+    },
+
+    habitBlockIcon(day) {
+      if (day.done) return '<span style="color:#4ade80">✓</span>';
+      if (day.is_today && day.is_target) return '<span style="color:#fbbf24" class="animate-pulse">•</span>';
+      if (day.is_past && day.is_target) return '<span style="color:#475569">–</span>';
+      if (day.is_future && day.is_target) return '<span style="color:#1e293b">·</span>';
+      return '';
+    },
+
+    get allHabitsComplete() {
+      if (!this.momentum?.habits?.length) return false;
+      return this.momentum.habits.every(h => this.isHabitWeekComplete(h));
+    },
+
+    async toggleHabitDayBlock(habit, day) {
+      const endpoint = day.done
+        ? `/api/habits/${habit.habit_id}/uncheck?date=${day.date}`
+        : `/api/habits/${habit.habit_id}/check?date=${day.date}`;
+      try {
+        await fetch(endpoint, { method: 'POST' });
+        await this.loadMomentum();
+      } catch(e) { console.error('toggleHabitDayBlock', e); }
     },
 
     gradeEmoji(grade) {

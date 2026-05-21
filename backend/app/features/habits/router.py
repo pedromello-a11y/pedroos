@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+from datetime import date as date_type
 
 from app.db import get_db
 from app.features.habits import service
@@ -38,14 +39,8 @@ async def delete_habit(habit_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{habit_id}/check")
-async def check_habit(habit_id: str, done: int = 1, date: str = None, db: AsyncSession = Depends(get_db)):
-    from datetime import date as _date
-    d = None
-    if date:
-        try:
-            d = _date.fromisoformat(date)
-        except ValueError:
-            raise HTTPException(400, "date inválida — use YYYY-MM-DD")
+async def check_habit(habit_id: str, done: int = 1, date: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    d = date_type.fromisoformat(date) if date else None
     log = await service.mark_habit(db, habit_id, d=d, done=done)
     if not log:
         raise HTTPException(404, "Hábito não encontrado")
@@ -53,14 +48,8 @@ async def check_habit(habit_id: str, done: int = 1, date: str = None, db: AsyncS
 
 
 @router.post("/{habit_id}/uncheck")
-async def uncheck_habit(habit_id: str, date: str = None, db: AsyncSession = Depends(get_db)):
-    from datetime import date as _date
-    d = None
-    if date:
-        try:
-            d = _date.fromisoformat(date)
-        except ValueError:
-            raise HTTPException(400, "date inválida — use YYYY-MM-DD")
+async def uncheck_habit(habit_id: str, date: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    d = date_type.fromisoformat(date) if date else None
     log = await service.mark_habit(db, habit_id, d=d, done=0)
     if not log:
         raise HTTPException(404, "Hábito não encontrado")
@@ -69,7 +58,6 @@ async def uncheck_habit(habit_id: str, date: str = None, db: AsyncSession = Depe
 
 @router.post("/{habit_id}/propose")
 async def propose_habit(habit_id: str, db: AsyncSession = Depends(get_db)):
-    """Propõe um hábito flex para hoje."""
     log = await service.propose_habit(db, habit_id)
     if not log:
         raise HTTPException(404, "Hábito não encontrado")
@@ -79,6 +67,11 @@ async def propose_habit(habit_id: str, db: AsyncSession = Depends(get_db)):
 @router.get("/today")
 async def today_status(db: AsyncSession = Depends(get_db)):
     return await service.get_today_status(db)
+
+
+@router.get("/history")
+async def habit_history(weeks: int = Query(4, ge=1, le=12), db: AsyncSession = Depends(get_db)):
+    return await service.get_habit_history(db, weeks=weeks)
 
 
 @router.get("/week")
