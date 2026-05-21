@@ -1063,9 +1063,13 @@
         <button @click="setView('notes')"
           :class="activeView === 'notes' ? (context === 'personal' ? 'ctx-ps' : 'ctx-hm') : 'text-slate-500 hover:text-slate-300'"
           class="text-xs font-bold px-4 py-1.5 rounded-md transition-all">📝 Notas</button>
+        <button @click="setView('refs')"
+          :class="activeView === 'refs' ? (context === 'personal' ? 'ctx-ps' : 'ctx-hm') : 'text-slate-500 hover:text-slate-300'"
+          class="text-xs font-bold px-4 py-1.5 rounded-md transition-all">📎 Refs</button>
       </div>
       <span x-show="activeView === 'tasks'" class="text-xs text-slate-600 font-mono" x-text="'· ' + totalDumpCount + ' tarefas'"></span>
       <span x-show="activeView === 'notes'" class="text-xs text-slate-600 font-mono" x-text="'· ' + notes.length + ' notas'"></span>
+      <span x-show="activeView === 'refs'" class="text-xs text-slate-600 font-mono" x-text="'· ' + refsTotal + ' refs'"></span>
     </div>
 
     <!-- TASK DUMP -->
@@ -1425,6 +1429,147 @@
             </div>
           </div>
         </template>
+      </div>
+
+    </section>
+
+    <!-- ═════ REFS (VAULT) ═════════════════════════════════════════════════ -->
+    <section x-show="activeView === 'refs'" x-cloak>
+
+      <!-- Toolbar -->
+      <div class="flex items-center gap-2 mb-4 flex-wrap">
+        <input x-model="refsQ" @input.debounce.400ms="loadRefs()"
+          type="text" placeholder="Buscar referências…"
+          class="flex-1 px-3 py-1.5 text-sm" style="min-width:160px" />
+        <button @click="refsBoard = null; refsUncategorized = false; loadRefs()"
+          class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
+          :class="!refsBoard && !refsUncategorized ? 'bg-ac-10 ac' : 'text-slate-500 hover:text-slate-300'"
+          style="border:1px solid var(--border)">Tudo</button>
+        <template x-for="board in refBoards.filter(b => b.id !== '__uncategorized__')" :key="board.id">
+          <button @click="refsBoard = board.name; refsUncategorized = false; loadRefs()"
+            class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
+            :class="refsBoard === board.name ? 'bg-ac-10 ac' : 'text-slate-500 hover:text-slate-300'"
+            :style="refsBoard === board.name && board.color ? `border:1px solid ${board.color}40;background:${board.color}15;color:${board.color}` : 'border:1px solid var(--border)'"
+            x-text="board.name + ' (' + board.count + ')'"></button>
+        </template>
+        <button @click="refsBoard = null; refsUncategorized = true; loadRefs()"
+          class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
+          :class="refsUncategorized ? 'bg-ac-10 ac' : 'text-slate-500 hover:text-slate-300'"
+          style="border:1px solid var(--border)"
+          x-text="'Inbox (' + (refBoards.find(b => b.id === \'__uncategorized__\')?.count || 0) + ')'"></button>
+        <button @click="showAddRef = true"
+          class="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+          style="background:var(--accent-10);border:1px solid var(--accent-20);color:var(--accent)">+ ref</button>
+      </div>
+
+      <!-- Empty state -->
+      <div x-show="refs.length === 0 && !refsLoading" class="text-center py-16 text-slate-600 text-sm">
+        Nenhuma referência salva.<br>
+        <span class="text-xs text-slate-700 mt-1 block">No WhatsApp: <code class="font-mono">ref: link</code> ou <code class="font-mono">ref transição: link</code></span>
+      </div>
+
+      <!-- Grid -->
+      <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr))">
+        <template x-for="ref in refs" :key="ref.id">
+          <div @click="openRefModal(ref)" class="card overflow-hidden cursor-pointer group transition-all hover:scale-[1.02]">
+            <!-- Thumbnail -->
+            <div class="aspect-video w-full overflow-hidden relative" style="background:var(--surface)">
+              <img x-show="ref.thumbnail" :src="ref.thumbnail"
+                class="w-full h-full object-cover" loading="lazy"
+                @error="$el.style.display='none'" />
+              <div x-show="!ref.thumbnail" class="w-full h-full flex items-center justify-center text-3xl text-slate-700"
+                x-text="ref.source_type === 'vimeo' || ref.source_type === 'youtube' ? '▶' : ref.source_type === 'instagram' ? '📷' : ref.source_type === 'image' ? '🖼' : '🔗'"></div>
+              <span x-show="ref.source_type && ref.source_type !== 'link' && ref.source_type !== 'image'"
+                class="absolute bottom-1.5 left-1.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                style="background:rgba(0,0,0,0.7);color:rgba(255,255,255,0.7)"
+                x-text="ref.source_type"></span>
+            </div>
+            <!-- Info -->
+            <div class="p-3">
+              <p class="text-xs font-medium text-slate-300 truncate mb-1"
+                x-text="ref.title || ref.note || ref.domain || 'Sem título'"></p>
+              <p x-show="ref.note && ref.title && ref.note !== ref.title"
+                class="text-[10px] text-slate-600 truncate mb-1.5" x-text="ref.note"></p>
+              <div class="flex flex-wrap gap-1">
+                <template x-for="b in ref.boards" :key="b">
+                  <span class="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                    style="background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--accent)"
+                    x-text="'#' + b"></span>
+                </template>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Add ref modal -->
+      <div x-show="showAddRef" x-cloak
+        class="fixed inset-0 z-40 flex items-center justify-center p-4"
+        style="background:rgba(0,0,0,0.7)" @click.self="showAddRef = false">
+        <div class="card w-full max-w-md p-6 slide-up">
+          <h3 class="text-sm font-bold text-white mb-4">📎 Nova referência</h3>
+          <div class="space-y-3">
+            <input x-model="newRef.url" type="text" placeholder="URL (cole o link)"
+              @paste="$nextTick(() => extractRefMeta())"
+              class="w-full px-3 py-2 text-sm" />
+            <input x-model="newRef.title" type="text" placeholder="Título (auto-preenchido)"
+              class="w-full px-3 py-2 text-sm" />
+            <textarea x-model="newRef.note" placeholder="Nota (opcional)" rows="2"
+              class="w-full px-3 py-2 text-sm"></textarea>
+            <input x-model="newRef.boards" type="text" placeholder="Boards: transição, typo (vírgula separa)"
+              class="w-full px-3 py-2 text-sm" />
+            <div class="flex justify-end gap-2 pt-2">
+              <button @click="showAddRef = false" class="text-xs text-slate-500 px-3 py-1.5">Cancelar</button>
+              <button @click="saveNewRef()" class="text-xs font-bold px-4 py-2 rounded-lg"
+                style="background:var(--accent);color:white">Salvar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ref detail modal -->
+      <div x-show="refModal.show" x-cloak
+        class="fixed inset-0 z-40 flex items-start justify-center py-8 px-4 overflow-y-auto"
+        style="background:rgba(0,0,0,0.7)" @click.self="refModal.show = false">
+        <div x-show="refModal.ref" class="card w-full max-w-lg shadow-2xl slide-up overflow-hidden">
+          <div x-show="refModal.ref?.thumbnail" class="aspect-video w-full overflow-hidden" style="background:var(--surface)">
+            <img :src="refModal.ref?.thumbnail" class="w-full h-full object-cover" />
+          </div>
+          <div class="p-5">
+            <div class="flex items-start justify-between gap-3 mb-3">
+              <input x-model="refModal.ref.title" @change="updateRefField('title')"
+                class="flex-1 bg-transparent text-sm font-semibold text-white border-b pb-1 focus:outline-none"
+                style="border-color:var(--border);border-radius:0" placeholder="Título" />
+              <button @click="refModal.show = false" class="text-slate-500 hover:text-white text-lg">×</button>
+            </div>
+            <div x-show="refModal.ref?.url" class="mb-3">
+              <a :href="refModal.ref?.url" target="_blank"
+                class="text-xs ac hover:underline truncate block" x-text="refModal.ref?.url"></a>
+            </div>
+            <textarea x-model="refModal.ref.note" @change="updateRefField('note')"
+              rows="3" placeholder="Notas…" class="w-full px-3 py-2 text-sm mb-3"></textarea>
+            <div class="mb-3">
+              <p class="text-[10px] font-bold text-slate-500 mb-1.5">Boards</p>
+              <div class="flex flex-wrap gap-1.5 mb-2">
+                <template x-for="b in (refModal.ref?.boards || [])" :key="b">
+                  <span class="text-[10px] font-bold px-2 py-1 rounded-lg flex items-center gap-1"
+                    style="background:var(--accent-10);border:1px solid var(--accent-20);color:var(--accent)">
+                    <span x-text="'#' + b"></span>
+                    <button @click="removeRefBoard(b)" class="text-xs leading-none opacity-60 hover:opacity-100">×</button>
+                  </span>
+                </template>
+              </div>
+              <div class="flex gap-2">
+                <input x-model="refModal.newBoard" @keydown.enter="addRefBoard()"
+                  type="text" placeholder="+ board (Enter)" class="flex-1 px-2 py-1 text-xs" />
+              </div>
+            </div>
+            <div class="flex items-center justify-between pt-3" style="border-top:1px solid var(--border)">
+              <span class="text-[10px] text-slate-600" x-text="'via ' + (refModal.ref?.source || 'dashboard') + ' · ' + (refModal.ref?.source_type || '')"></span>
+              <button @click="deleteCurrentRef()" class="text-xs text-red-500/60 hover:text-red-400 transition-colors">excluir</button>
+            </div>
+          </div>
+        </div>
       </div>
 
     </section>
@@ -2736,6 +2881,18 @@ function pedroOS() {
     noteModal: { show: false, note: null },
     _noteDebounce: {},
 
+    // refs (vault) state
+    refs: [],
+    refBoards: [],
+    refsTotal: 0,
+    refsQ: '',
+    refsBoard: null,
+    refsUncategorized: false,
+    refsLoading: false,
+    showAddRef: false,
+    newRef: { url: '', title: '', note: '', boards: '' },
+    refModal: { show: false, ref: null, newBoard: '' },
+
     // Habits & Points
     momentum: { date: '', streak: 0, total_points: 0, today_points: 0, today_base_points: 0, tasks_proposed: 0, tasks_done: 0, completion_pct: 0, grade: 'neutral', combo: { current_position: 0, current_multiplier: 1.0, next_multiplier: null, is_frenzy: false, until_frenzy: 7 }, habits: [], week: [], new_records: [], milestones: [] },
     comboToast: null,
@@ -2889,6 +3046,7 @@ function pedroOS() {
         this.loadMomentum(),
         this.loadHabits(),
         this.loadShopping(),
+        this.loadRefBoards(),
       ]);
       this.updateTitle();
     },
@@ -4191,11 +4349,96 @@ function pedroOS() {
       } catch (e) { console.error(`[api] ${method} ${path} threw:`, e); return null; }
     },
 
-    // ── notes ─────────────────────────────────────────────────────────────
+    // ── notes + refs ──────────────────────────────────────────────────────
     setView(v) {
       this.activeView = v;
       localStorage.setItem('pedro_view', v);
       if (v === 'notes') this.loadNotes();
+      if (v === 'refs' && this.refs.length === 0) { this.loadRefs(); this.loadRefBoards(); }
+    },
+
+    // ── refs (vault) ──────────────────────────────────────────────────────
+    async loadRefs() {
+      this.refsLoading = true;
+      try {
+        let url = '/api/refs?limit=200';
+        if (this.refsUncategorized) url += '&uncategorized=true';
+        else if (this.refsBoard) url += '&board=' + encodeURIComponent(this.refsBoard);
+        if (this.refsQ) url += '&q=' + encodeURIComponent(this.refsQ);
+        const data = await this.api(url);
+        if (data && !data._error) {
+          this.refs = data.items || [];
+          this.refsTotal = data.total || 0;
+        }
+      } catch(e) { console.warn('loadRefs error', e); }
+      this.refsLoading = false;
+    },
+
+    async loadRefBoards() {
+      try {
+        const data = await this.api('/api/ref-boards');
+        if (data && !data._error) this.refBoards = data;
+      } catch(e) {}
+    },
+
+    async extractRefMeta() {
+      if (!this.newRef.url) return;
+      try {
+        const meta = await this.api('/api/refs/extract', 'POST', { url: this.newRef.url });
+        if (meta && !meta._error && meta.title && !this.newRef.title) this.newRef.title = meta.title;
+      } catch(e) {}
+    },
+
+    async saveNewRef() {
+      const boards = this.newRef.boards.split(',').map(b => b.trim()).filter(Boolean);
+      const res = await this.api('/api/refs', 'POST', {
+        url: this.newRef.url || null,
+        title: this.newRef.title || null,
+        note: this.newRef.note || null,
+        boards,
+      });
+      if (res && !res._error) {
+        this.showAddRef = false;
+        this.newRef = { url: '', title: '', note: '', boards: '' };
+        await Promise.all([this.loadRefs(), this.loadRefBoards()]);
+      }
+    },
+
+    openRefModal(ref) {
+      this.refModal = { show: true, ref: { ...ref }, newBoard: '' };
+    },
+
+    async updateRefField(field) {
+      if (!this.refModal.ref) return;
+      const body = {};
+      body[field] = this.refModal.ref[field];
+      await this.api(`/api/refs/${this.refModal.ref.id}`, 'PATCH', body);
+      await this.loadRefs();
+    },
+
+    async addRefBoard() {
+      if (!this.refModal.newBoard.trim() || !this.refModal.ref) return;
+      await this.api(`/api/refs/${this.refModal.ref.id}/boards`, 'POST', { board: this.refModal.newBoard.trim() });
+      this.refModal.ref.boards = [...this.refModal.ref.boards, this.refModal.newBoard.trim()];
+      this.refModal.newBoard = '';
+      await this.loadRefBoards();
+    },
+
+    async removeRefBoard(boardName) {
+      if (!this.refModal.ref) return;
+      const board = this.refBoards.find(b => b.name === boardName);
+      if (!board) return;
+      await this.api(`/api/refs/${this.refModal.ref.id}/boards/${board.id}`, 'DELETE');
+      this.refModal.ref.boards = this.refModal.ref.boards.filter(b => b !== boardName);
+      await Promise.all([this.loadRefs(), this.loadRefBoards()]);
+    },
+
+    async deleteCurrentRef() {
+      if (!this.refModal.ref) return;
+      if (!confirm('Excluir referência?')) return;
+      await this.api(`/api/refs/${this.refModal.ref.id}`, 'DELETE');
+      this.refModal.show = false;
+      await Promise.all([this.loadRefs(), this.loadRefBoards()]);
     },
 
     async loadNotes() {
