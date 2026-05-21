@@ -1518,11 +1518,16 @@
       <div x-show="showAddRef" x-cloak
         class="fixed inset-0 z-40 flex items-center justify-center p-4"
         style="background:rgba(0,0,0,0.7)" @click.self="showAddRef = false">
-        <div class="card w-full max-w-md p-6 slide-up">
+        <div class="card w-full max-w-md p-6 slide-up"
+          @paste="handleRefPaste($event)"
+          @dragover.prevent="refDragOver = true"
+          @dragleave.prevent="refDragOver = false"
+          @drop.prevent="handleRefDrop($event)"
+          :style="refDragOver ? 'border-color:var(--accent);background:var(--accent-10)' : ''">
           <h3 class="text-sm font-bold text-white mb-4">📎 Nova referência</h3>
           <div class="space-y-3">
             <input x-model="newRef.url" type="text" placeholder="URL (cole o link)"
-              @paste="$nextTick(() => extractRefMeta())"
+              @paste.stop="$nextTick(() => extractRefMeta())"
               class="w-full px-3 py-2 text-sm" />
             <input x-model="newRef.title" type="text" placeholder="Título (auto-preenchido)"
               class="w-full px-3 py-2 text-sm" />
@@ -1530,8 +1535,23 @@
               class="w-full px-3 py-2 text-sm"></textarea>
             <input x-model="newRef.boards" type="text" placeholder="Boards: transição, typo (vírgula separa)"
               class="w-full px-3 py-2 text-sm" />
+
+            <!-- Image preview if pasted/dropped -->
+            <div x-show="newRef.imageFile" class="rounded-lg overflow-hidden relative" style="border:1px solid var(--border)">
+              <img x-show="newRef.imagePreview" :src="newRef.imagePreview" class="w-full max-h-48 object-cover" />
+              <button @click="newRef.imageFile = null; newRef.imagePreview = null"
+                class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full text-white text-xs"
+                style="background:rgba(0,0,0,0.6)">×</button>
+            </div>
+
+            <!-- File picker -->
+            <label class="flex items-center gap-2 text-[10px] text-slate-500 hover:text-slate-300 cursor-pointer transition-colors">
+              <span x-text="newRef.imageFile ? '🖼 ' + newRef.imageFile.name : '🖼 Cole, arraste ou escolha uma imagem'"></span>
+              <input type="file" accept="image/*" class="hidden" @change="handleRefFile($event.target.files[0])" />
+            </label>
+
             <div class="flex justify-end gap-2 pt-2">
-              <button @click="showAddRef = false" class="text-xs text-slate-500 px-3 py-1.5">Cancelar</button>
+              <button @click="closeAddRef()" class="text-xs text-slate-500 px-3 py-1.5">Cancelar</button>
               <button @click="saveNewRef()" class="text-xs font-bold px-4 py-2 rounded-lg"
                 style="background:var(--accent);color:white">Salvar</button>
             </div>
@@ -2902,7 +2922,8 @@ function pedroOS() {
     refsUncategorized: false,
     refsLoading: false,
     showAddRef: false,
-    newRef: { url: '', title: '', note: '', boards: '' },
+    newRef: { url: '', title: '', note: '', boards: '', imageFile: null, imagePreview: null },
+    refDragOver: false,
     refModal: { show: false, ref: null, newBoard: '' },
 
     // Habits & Points
@@ -4441,6 +4462,25 @@ function pedroOS() {
 
     async saveNewRef() {
       const boards = this.newRef.boards.split(',').map(b => b.trim()).filter(Boolean);
+
+      // Se tem arquivo de imagem, usa o endpoint multipart
+      if (this.newRef.imageFile) {
+        const fd = new FormData();
+        fd.append('file', this.newRef.imageFile);
+        if (this.newRef.url) fd.append('url', this.newRef.url);
+        if (this.newRef.title) fd.append('title', this.newRef.title);
+        if (this.newRef.note) fd.append('note', this.newRef.note);
+        if (boards.length) fd.append('boards', boards.join(','));
+        try {
+          const res = await fetch('/api/refs/upload', { method: 'POST', body: fd });
+          if (res.ok) {
+            this.closeAddRef();
+            await Promise.all([this.loadRefs(), this.loadRefBoards()]);
+          }
+        } catch(e) { console.error('upload error', e); }
+        return;
+      }
+
       const res = await this.api('/api/refs', 'POST', {
         url: this.newRef.url || null,
         title: this.newRef.title || null,
@@ -4448,10 +4488,43 @@ function pedroOS() {
         boards,
       });
       if (res && !res._error) {
-        this.showAddRef = false;
-        this.newRef = { url: '', title: '', note: '', boards: '' };
+        this.closeAddRef();
         await Promise.all([this.loadRefs(), this.loadRefBoards()]);
       }
+    },
+
+    closeAddRef() {
+      this.showAddRef = false;
+      this.newRef = { url: '', title: '', note: '', boards: '', imageFile: null, imagePreview: null };
+      this.refDragOver = false;
+    },
+
+    handleRefFile(file) {
+      if (!file || !file.type.startsWith('image/')) return;
+      this.newRef.imageFile = file;
+      const reader = new FileReader();
+      reader.onload = e => { this.newRef.imagePreview = e.target.result; };
+      reader.readAsDataURL(file);
+    },
+
+    handleRefPaste(event) {
+      const items = event.clipboardData?.items || [];
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            event.preventDefault();
+            this.handleRefFile(file);
+            return;
+          }
+        }
+      }
+    },
+
+    handleRefDrop(event) {
+      this.refDragOver = false;
+      const file = event.dataTransfer?.files?.[0];
+      if (file) this.handleRefFile(file);
     },
 
     openRefModal(ref) {
