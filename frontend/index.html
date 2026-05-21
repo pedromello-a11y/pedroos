@@ -1473,16 +1473,27 @@
         <template x-for="ref in refs" :key="ref.id">
           <div @click="openRefModal(ref)" class="card overflow-hidden cursor-pointer group transition-all hover:scale-[1.02]">
             <!-- Thumbnail -->
-            <div class="aspect-video w-full overflow-hidden relative" style="background:var(--surface)">
+            <div class="aspect-video w-full overflow-hidden relative"
+              :style="!ref.thumbnail ? `background:${refPlaceholderBg(ref.source_type)}` : 'background:var(--surface)'">
               <img x-show="ref.thumbnail" :src="ref.thumbnail"
                 class="w-full h-full object-cover" loading="lazy"
                 @error="$el.style.display='none'" />
-              <div x-show="!ref.thumbnail" class="w-full h-full flex items-center justify-center text-3xl text-slate-700"
-                x-text="ref.source_type === 'vimeo' || ref.source_type === 'youtube' ? '▶' : ref.source_type === 'instagram' ? '📷' : ref.source_type === 'image' ? '🖼' : '🔗'"></div>
+              <div x-show="!ref.thumbnail" class="w-full h-full flex items-center justify-center text-4xl"
+                style="opacity:0.5"
+                x-text="refPlaceholderIcon(ref.source_type)"></div>
               <span x-show="ref.source_type && ref.source_type !== 'link' && ref.source_type !== 'image'"
                 class="absolute bottom-1.5 left-1.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
                 style="background:rgba(0,0,0,0.7);color:rgba(255,255,255,0.7)"
                 x-text="ref.source_type"></span>
+              <!-- Play button: abre link em nova aba sem disparar modal -->
+              <a x-show="ref.url && (ref.source_type === 'youtube' || ref.source_type === 'vimeo' || ref.source_type === 'tiktok' || ref.source_type === 'instagram')"
+                :href="ref.url" target="_blank" rel="noopener"
+                @click.stop
+                class="absolute bottom-1.5 right-1.5 w-8 h-8 rounded-full flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-110"
+                style="background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);color:white"
+                title="Abrir link">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              </a>
             </div>
             <!-- Info -->
             <div class="p-3">
@@ -4358,6 +4369,26 @@ function pedroOS() {
     },
 
     // ── refs (vault) ──────────────────────────────────────────────────────
+    refPlaceholderIcon(type) {
+      const map = { youtube: '▶', vimeo: '▶', tiktok: '♪', instagram: '📷',
+                    behance: '🎨', dribbble: '🏀', pinterest: '📌',
+                    figma: '✦', twitter: '𝕏', image: '🖼' };
+      return map[type] || '🔗';
+    },
+
+    refPlaceholderBg(type) {
+      const map = {
+        youtube: 'linear-gradient(135deg, #1a0000 0%, #3d0a0a 100%)',
+        vimeo: 'linear-gradient(135deg, #001a2e 0%, #0a3a5e 100%)',
+        tiktok: 'linear-gradient(135deg, #0a0a0a 0%, #2a0a2a 100%)',
+        instagram: 'linear-gradient(135deg, #2a0a2a 0%, #3d1a3a 100%)',
+        behance: 'linear-gradient(135deg, #001a3d 0%, #0a2a5e 100%)',
+        dribbble: 'linear-gradient(135deg, #2a0a1a 0%, #5e0a2a 100%)',
+        figma: 'linear-gradient(135deg, #1a0a2a 0%, #2a1a4a 100%)',
+      };
+      return map[type] || 'var(--surface)';
+    },
+
     async loadRefs() {
       this.refsLoading = true;
       try {

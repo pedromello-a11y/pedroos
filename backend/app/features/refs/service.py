@@ -31,6 +31,8 @@ def _detect_source_type(url: str) -> tuple[str, str]:
         return ("youtube", domain)
     if "instagram.com" in domain:
         return ("instagram", domain)
+    if "tiktok.com" in domain:
+        return ("tiktok", domain)
     if "behance.net" in domain:
         return ("behance", domain)
     if "dribbble.com" in domain:
@@ -49,12 +51,89 @@ def _detect_source_type(url: str) -> tuple[str, str]:
     return ("link", domain)
 
 
+def _youtube_video_id(url: str) -> Optional[str]:
+    """Extrai o ID do vídeo de uma URL do YouTube (watch, youtu.be, shorts, embed)."""
+    try:
+        parsed = urlparse(url)
+        host = parsed.netloc.lower().replace("www.", "")
+        if host == "youtu.be":
+            vid = parsed.path.lstrip("/").split("/")[0]
+            return vid or None
+        if "youtube.com" in host:
+            # /watch?v=ID
+            m = re.search(r"[?&]v=([A-Za-z0-9_-]{6,})", url)
+            if m:
+                return m.group(1)
+            # /shorts/ID, /embed/ID, /v/ID
+            m = re.match(r"^/(?:shorts|embed|v)/([A-Za-z0-9_-]{6,})", parsed.path)
+            if m:
+                return m.group(1)
+    except Exception:
+        pass
+    return None
+
+
+async def _extract_youtube(url: str) -> dict:
+    """YouTube: thumb via URL direta (sem API). Título via oEmbed (público, sem auth)."""
+    out: dict = {}
+    vid = _youtube_video_id(url)
+    if not vid:
+        return out
+    out["thumbnail"] = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
+    try:
+        async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
+            r = await client.get(
+                "https://www.youtube.com/oembed",
+                params={"url": url, "format": "json"},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                if data.get("title"):
+                    out["title"] = str(data["title"])[:200]
+                if data.get("thumbnail_url"):
+                    out["thumbnail"] = data["thumbnail_url"]
+    except Exception:
+        pass
+    return out
+
+
+async def _extract_vimeo(url: str) -> dict:
+    """Vimeo: oEmbed retorna title + thumbnail_url (frame escolhido pelo dono)."""
+    out: dict = {}
+    try:
+        async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
+            r = await client.get(
+                "https://vimeo.com/api/oembed.json",
+                params={"url": url},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                if data.get("title"):
+                    out["title"] = str(data["title"])[:200]
+                if data.get("thumbnail_url"):
+                    out["thumbnail"] = data["thumbnail_url"]
+    except Exception:
+        pass
+    return out
+
+
 async def extract_metadata(url: str) -> dict:
     result: dict = {"title": None, "thumbnail": None}
     source_type, domain = _detect_source_type(url)
     result["source_type"] = source_type
     result["domain"] = domain
 
+    # Platform-specific extractors (mais confiáveis que OG scraping)
+    if source_type == "youtube":
+        result.update(await _extract_youtube(url))
+        if result.get("title") and result.get("thumbnail"):
+            return result
+    elif source_type == "vimeo":
+        result.update(await _extract_vimeo(url))
+        if result.get("title") and result.get("thumbnail"):
+            return result
+
+    # Fallback: scrape OG tags
     try:
         async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -62,21 +141,23 @@ async def extract_metadata(url: str) -> dict:
                 return result
             html = resp.text[:50000]
 
-        m = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
-        if not m:
-            m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:title["\']', html, re.I)
-        if m:
-            result["title"] = m.group(1).strip()[:200]
-        else:
-            m = re.search(r'<title[^>]*>([^<]+)</title>', html, re.I)
+        if not result.get("title"):
+            m = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
+            if not m:
+                m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:title["\']', html, re.I)
             if m:
                 result["title"] = m.group(1).strip()[:200]
+            else:
+                m = re.search(r'<title[^>]*>([^<]+)</title>', html, re.I)
+                if m:
+                    result["title"] = m.group(1).strip()[:200]
 
-        m = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
-        if not m:
-            m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']', html, re.I)
-        if m:
-            result["thumbnail"] = m.group(1).strip()
+        if not result.get("thumbnail"):
+            m = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
+            if not m:
+                m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']', html, re.I)
+            if m:
+                result["thumbnail"] = m.group(1).strip()
 
     except Exception:
         pass
