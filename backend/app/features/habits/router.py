@@ -38,16 +38,30 @@ async def delete_habit(habit_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{habit_id}/check")
-async def check_habit(habit_id: str, done: int = 1, db: AsyncSession = Depends(get_db)):
-    log = await service.mark_habit(db, habit_id, done=done)
+async def check_habit(habit_id: str, done: int = 1, date: str = None, db: AsyncSession = Depends(get_db)):
+    from datetime import date as _date
+    d = None
+    if date:
+        try:
+            d = _date.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(400, "date inválida — use YYYY-MM-DD")
+    log = await service.mark_habit(db, habit_id, d=d, done=done)
     if not log:
         raise HTTPException(404, "Hábito não encontrado")
     return HabitLogResponse.model_validate(log)
 
 
 @router.post("/{habit_id}/uncheck")
-async def uncheck_habit(habit_id: str, db: AsyncSession = Depends(get_db)):
-    log = await service.mark_habit(db, habit_id, done=0)
+async def uncheck_habit(habit_id: str, date: str = None, db: AsyncSession = Depends(get_db)):
+    from datetime import date as _date
+    d = None
+    if date:
+        try:
+            d = _date.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(400, "date inválida — use YYYY-MM-DD")
+    log = await service.mark_habit(db, habit_id, d=d, done=0)
     if not log:
         raise HTTPException(404, "Hábito não encontrado")
     return HabitLogResponse.model_validate(log)

@@ -1762,16 +1762,20 @@
               <!-- Week progress (specific days or flex target) -->
               <div x-show="habit.week_progress && habit.week_progress.length" class="flex items-center gap-2 mt-1.5 flex-wrap">
                 <template x-for="(p, i) in (habit.week_progress || [])" :key="i">
-                  <div class="flex items-center gap-1">
+                  <div class="flex items-center gap-1"
+                    :class="p.date && !p.is_today ? 'cursor-pointer group/wp' : ''"
+                    :title="p.date && !p.is_today && !p.done ? 'Marcar ' + p.label + ' como feito' : (p.done && p.date && !p.is_today ? 'Desmarcar ' + p.label : '')"
+                    @click="p.date && !p.is_today ? toggleHabitDay(habit, p) : null">
                     <span x-show="p.label"
                       class="text-[8px] font-bold uppercase tracking-wider leading-none"
-                      :class="p.is_today ? 'text-cyan-300' : (p.done ? 'text-emerald-400/70' : 'text-slate-600')"
+                      :class="p.is_today ? 'text-cyan-300' : (p.done ? 'text-emerald-400/70' : 'text-slate-600 group-hover/wp:text-slate-400')"
                       x-text="p.label"></span>
                     <span class="w-2 h-2 rounded-full transition-all"
                       :class="{
                         'bg-emerald-400': p.done,
                         'bg-slate-800 ring-1 ring-cyan-400/60': !p.done && p.is_today,
-                        'bg-slate-800': !p.done && !p.is_today
+                        'bg-slate-700 group-hover/wp:bg-emerald-900': !p.done && !p.is_today && p.date,
+                        'bg-slate-800': !p.done && !p.is_today && !p.date
                       }"
                       :style="p.done && p.is_today ? 'box-shadow:0 0 6px rgba(16,185,129,0.7)' : (p.is_today ? 'box-shadow:0 0 6px rgba(34,211,238,0.4)' : '')"></span>
                   </div>
@@ -3815,6 +3819,13 @@ function pedroOS() {
     async loadHabits() {
       const res = await this.api('/api/habits');
       if (res && !res._error) this.habits = res;
+    },
+
+    async toggleHabitDay(habit, p) {
+      const endpoint = p.done ? 'uncheck' : 'check';
+      await this.api(`/api/habits/${habit.habit_id}/${endpoint}?date=${p.date}`, 'POST');
+      p.done = !p.done;
+      await this.loadMomentum();
     },
 
     async toggleHabit(habit) {
