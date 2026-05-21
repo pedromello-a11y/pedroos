@@ -161,8 +161,12 @@ if os.path.isdir(FRONTEND_DIR):
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
     @app.get("/")
-    async def serve_dashboard():
+    async def serve_index():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+    @app.get("/dashboard")
+    async def serve_dashboard():
+        return FileResponse(os.path.join(FRONTEND_DIR, "dashboard.html"))
 
 
 @app.post("/api/scheduler/test-daily")
