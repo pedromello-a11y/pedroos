@@ -95,7 +95,13 @@ class HabitTodayItem(BaseModel):
     proposed: bool   # True se é dia deste hábito ou foi proposto manualmente
     is_today_habit: bool = True  # False = não é dia agendado hoje (mas mostra na semana)
     streak: int
-    week_progress: List[dict] = []  # [{label, done, is_today, date}]
+    week_progress: List[dict] = []  # [{label, done, is_today, date, status}]
+    week_history: List[float] = []  # últimas 4 semanas, % done 0-1, mais antigo→recente
+    week_target: int = 0  # quantos dias é "semana perfeita"
+    week_done_count: int = 0  # já feitos essa semana
+    is_perfect_week: bool = False
+    suggested_today: bool = False  # frontend destaca chip de hoje
+    suggestion_text: Optional[str] = None  # texto curto explicando sugestão
 
 
 class TodayStatus(BaseModel):

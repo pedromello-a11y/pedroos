@@ -248,15 +248,70 @@ async def get_habit_streak(db: AsyncSession, habit_id: str, from_date: date = No
 
 
 DAY_LABELS_PT = {"mon": "seg", "tue": "ter", "wed": "qua", "thu": "qui", "fri": "sex", "sat": "sáb", "sun": "dom"}
+WEEKDAY_PT = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+
+
+def _scheduled_target(habit: Habit) -> int:
+    """Quantos 'sucessos' compõem uma semana perfeita."""
+    if habit.frequency == "daily":
+        return 7
+    if habit.frequency == "flex":
+        return habit.weekly_target or 0
+    return len(_habit_days(habit.frequency))
+
+
+async def _compute_week_history(db: AsyncSession, habit: Habit, d: date, num_weeks: int = 4) -> list[float]:
+    """% done por semana (0.0–1.0), do mais antigo ao mais recente."""
+    target = _scheduled_target(habit)
+    if target <= 0:
+        return [0.0] * num_weeks
+    history: list[float] = []
+    for i in range(num_weeks - 1, -1, -1):
+        ws = _week_start(d) - timedelta(days=7 * i)
+        we = ws + timedelta(days=6)
+        res = await db.execute(
+            select(func.count(HabitLog.id)).where(
+                HabitLog.habit_id == habit.id,
+                HabitLog.date >= ws.isoformat(),
+                HabitLog.date <= we.isoformat(),
+                HabitLog.done == 1,
+            )
+        )
+        done = res.scalar() or 0
+        history.append(round(min(1.0, done / target), 2))
+    return history
+
+
+async def _preferred_weekdays(db: AsyncSession, habit_id: str, d: date, lookback_days: int = 28) -> dict[int, int]:
+    """Quantas vezes (nos últimos N dias) o hábito foi feito em cada weekday (0-6)."""
+    from_d = d - timedelta(days=lookback_days)
+    res = await db.execute(
+        select(HabitLog.date).where(
+            HabitLog.habit_id == habit_id,
+            HabitLog.date >= from_d.isoformat(),
+            HabitLog.date <= d.isoformat(),
+            HabitLog.done == 1,
+        )
+    )
+    counts: dict[int, int] = {}
+    for (dstr,) in res.all():
+        try:
+            wd = date.fromisoformat(dstr).weekday()
+        except ValueError:
+            continue
+        counts[wd] = counts.get(wd, 0) + 1
+    return counts
 
 
 async def _compute_week_progress(db: AsyncSession, habit: Habit, d: date) -> list[dict]:
-    """Retorna progresso semanal pra UI: list de {label, done, is_today, date}."""
+    """Progresso semanal pra UI: list de {label, done, is_today, date, status}.
+
+    status: 'done' | 'today' | 'suggested' | 'missed' | 'future' | 'open'
+    """
     ws = _week_start(d)
     progress: list[dict] = []
 
     if habit.frequency == "flex" and habit.weekly_target:
-        # N slots, preenche conforme done na semana
         we = ws + timedelta(days=6)
         res = await db.execute(
             select(HabitLog).where(
@@ -264,20 +319,55 @@ async def _compute_week_progress(db: AsyncSession, habit: Habit, d: date) -> lis
                 HabitLog.date >= ws.isoformat(),
                 HabitLog.date <= we.isoformat(),
                 HabitLog.done == 1,
-            )
+            ).order_by(HabitLog.date)
         )
-        done_count = len(list(res.scalars().all()))
-        for i in range(habit.weekly_target):
+        logs = list(res.scalars().all())
+
+        # Slot feito → mostra o dia em que foi feito
+        for log in logs:
+            try:
+                ld = date.fromisoformat(log.date)
+            except ValueError:
+                continue
             progress.append({
-                "label": "",
-                "done": i < done_count,
+                "label": WEEKDAY_PT[ld.weekday()],
+                "done": True,
+                "is_today": ld == d,
+                "date": log.date,
+                "status": "done",
+            })
+
+        remaining = max(0, habit.weekly_target - len(logs))
+        today_done_already = any(
+            (lg.date == d.isoformat()) for lg in logs
+        )
+
+        # Slot sugerido (hoje) — se hoje for um dia preferido e ainda faltar slot
+        prefs = await _preferred_weekdays(db, habit.id, d)
+        if remaining > 0 and not today_done_already:
+            top_wds = sorted(prefs.items(), key=lambda x: -x[1])[:3]
+            top_wds_set = {wd for wd, _ in top_wds if _ > 0}
+            if d.weekday() in top_wds_set or not top_wds_set:
+                progress.append({
+                    "label": WEEKDAY_PT[d.weekday()],
+                    "done": False,
+                    "is_today": True,
+                    "date": d.isoformat(),
+                    "status": "suggested",
+                })
+                remaining -= 1
+
+        for _ in range(remaining):
+            progress.append({
+                "label": "—",
+                "done": False,
                 "is_today": False,
                 "date": None,
+                "status": "open",
             })
         return progress
 
     if habit.frequency in ("daily", "flex"):
-        # daily ou flex sem target: sem progresso semanal específico
         return progress
 
     # Dias específicos tipo "mon,wed"
@@ -292,13 +382,52 @@ async def _compute_week_progress(db: AsyncSession, habit: Habit, d: date) -> lis
             ).order_by(HabitLog.created_at.desc()).limit(1)
         )
         log = log_res.scalar_one_or_none()
+        if log:
+            status = "done"
+        elif day_date == d:
+            status = "today"
+        elif day_date < d:
+            status = "missed"
+        else:
+            status = "future"
         progress.append({
             "label": DAY_LABELS_PT[code],
             "done": log is not None,
             "is_today": day_date == d,
             "date": day_date.isoformat(),
+            "status": status,
         })
     return progress
+
+
+def _suggestion_text(habit: Habit, d: date, week_done: int, prefs: dict[int, int]) -> tuple[bool, Optional[str]]:
+    """(suggested_today, text). Texto curto e celebratório."""
+    target = _scheduled_target(habit)
+    if target == 0:
+        return False, None
+    if week_done >= target:
+        return False, None
+
+    # Hábitos de dias fixos
+    if habit.frequency not in ("flex", "daily"):
+        if _is_habit_day(habit, d):
+            return True, f"hoje é dia de {habit.name.lower()}"
+        return False, None
+
+    if habit.frequency == "daily":
+        return True, None
+
+    # Flex
+    today_wd = d.weekday()
+    today_count = prefs.get(today_wd, 0)
+    if today_count > 0:
+        return True, f"você costuma fazer na {WEEKDAY_PT[today_wd]} ({today_count}x nas últimas 4 semanas)"
+    # Sem preferência ainda: sugere hoje mesmo
+    if not prefs:
+        return True, "registre quando fizer — vou aprender seus dias"
+    # Tem preferência mas hoje não é dela
+    top_wd = max(prefs.items(), key=lambda x: x[1])[0]
+    return False, f"melhor dia: {WEEKDAY_PT[top_wd]}"
 
 
 async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTodayItem]:
@@ -320,9 +449,14 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
         log = log_result.scalar_one_or_none()
 
         week_progress = await _compute_week_progress(db, habit, d)
+        week_history = await _compute_week_history(db, habit, d)
+        week_target = _scheduled_target(habit)
+        prefs = await _preferred_weekdays(db, habit.id, d) if habit.frequency == "flex" else {}
 
         if habit.frequency == "flex" and habit.weekly_target:
             week_done = await _count_week_done(db, habit.id, d)
+            suggested, suggestion = _suggestion_text(habit, d, week_done, prefs)
+            perfect = week_done >= habit.weekly_target
             result.append(HabitTodayItem(
                 habit_id=habit.id,
                 name=habit.name,
@@ -333,10 +467,16 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
                 week_done=week_done,
                 points_done=pts["done"],
                 points_missed=abs(pts["missed"]),
-                done=1 if week_done >= habit.weekly_target else 0,
+                done=1 if perfect else 0,
                 proposed=True,
                 streak=0,
                 week_progress=week_progress,
+                week_history=week_history,
+                week_target=week_target,
+                week_done_count=week_done,
+                is_perfect_week=perfect,
+                suggested_today=suggested,
+                suggestion_text=suggestion,
             ))
             continue
 
@@ -353,10 +493,31 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
                 proposed=False,
                 streak=await get_habit_streak(db, habit.id, d - timedelta(days=1)),
                 week_progress=week_progress,
+                week_history=week_history,
+                week_target=week_target,
+                week_done_count=0,
+                is_perfect_week=False,
+                suggested_today=False,
+                suggestion_text=None,
             ))
             continue
 
         streak = await get_habit_streak(db, habit.id, d - timedelta(days=1))
+
+        # Conta done na semana pra detectar semana perfeita
+        ws = _week_start(d)
+        we = ws + timedelta(days=6)
+        wk_res = await db.execute(
+            select(func.count(HabitLog.id)).where(
+                HabitLog.habit_id == habit.id,
+                HabitLog.date >= ws.isoformat(),
+                HabitLog.date <= we.isoformat(),
+                HabitLog.done == 1,
+            )
+        )
+        week_done_count = wk_res.scalar() or 0
+        perfect = week_target > 0 and week_done_count >= week_target
+        suggested, suggestion = _suggestion_text(habit, d, week_done_count, prefs)
 
         result.append(HabitTodayItem(
             habit_id=habit.id,
@@ -371,6 +532,12 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
             is_today_habit=is_day,
             streak=streak + (1 if log and log.done else 0),
             week_progress=week_progress,
+            week_history=week_history,
+            week_target=week_target,
+            week_done_count=week_done_count,
+            is_perfect_week=perfect,
+            suggested_today=suggested,
+            suggestion_text=suggestion,
         ))
 
     return result

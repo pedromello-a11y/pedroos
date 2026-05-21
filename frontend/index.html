@@ -611,6 +611,117 @@
       border: 2.5px solid var(--border2);
     }
     .habit-ring-pending:hover { border-color: #4b5563; background: rgba(255,255,255,0.02); }
+
+    /* === Novo card de hábito (Apr 2026 redesign) === */
+    .habit-card {
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.015);
+      transition: all 0.35s ease;
+      position: relative;
+    }
+    .habit-card-perfect {
+      border-color: rgba(251, 191, 36, 0.45);
+      background: linear-gradient(135deg, rgba(251,191,36,0.08), rgba(16,185,129,0.04));
+      box-shadow: 0 0 18px rgba(251,191,36,0.12);
+    }
+    .habit-day-chip {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 36px; height: 36px;
+      border-radius: 9px;
+      font-size: 9px; font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      line-height: 1;
+      gap: 2px;
+      transition: all 0.25s ease;
+      cursor: pointer;
+      user-select: none;
+    }
+    .habit-day-chip-done {
+      background: #10b981;
+      color: white;
+      box-shadow: 0 0 8px rgba(16,185,129,0.4);
+    }
+    .habit-day-chip-done:hover { background: #059669; }
+    .habit-day-chip-suggested {
+      background: rgba(251, 191, 36, 0.12);
+      border: 1.5px solid #fbbf24;
+      color: #fbbf24;
+      animation: chip-pulse 2s ease-in-out infinite;
+    }
+    .habit-day-chip-suggested:hover {
+      background: rgba(251, 191, 36, 0.22);
+    }
+    .habit-day-chip-today {
+      background: rgba(34, 211, 238, 0.08);
+      border: 1.5px solid #22d3ee;
+      color: #67e8f9;
+      animation: chip-pulse 2s ease-in-out infinite;
+    }
+    .habit-day-chip-today:hover { background: rgba(34, 211, 238, 0.16); }
+    .habit-day-chip-missed {
+      background: transparent;
+      border: 1px dashed rgba(148, 163, 184, 0.18);
+      color: rgba(148, 163, 184, 0.45);
+      cursor: pointer;
+    }
+    .habit-day-chip-missed:hover {
+      border-color: rgba(16, 185, 129, 0.4);
+      color: rgba(16, 185, 129, 0.7);
+    }
+    .habit-day-chip-future {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: rgba(148, 163, 184, 0.55);
+      cursor: default;
+    }
+    .habit-day-chip-open {
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: rgba(148, 163, 184, 0.35);
+      cursor: default;
+    }
+    .habit-day-chip-check {
+      font-size: 11px;
+    }
+    @keyframes chip-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.3); }
+      50% { box-shadow: 0 0 0 4px rgba(251,191,36,0); }
+    }
+    .habit-week-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 9999px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+    }
+    .habit-week-badge-empty { background: rgba(148,163,184,0.08); color: rgba(148,163,184,0.65); }
+    .habit-week-badge-partial { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .habit-week-badge-perfect {
+      background: linear-gradient(135deg, #fbbf24, #10b981);
+      color: #0a0a0a;
+      box-shadow: 0 0 10px rgba(251,191,36,0.3);
+    }
+    .habit-sparkline {
+      display: inline-flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 14px;
+    }
+    .habit-sparkline-bar {
+      width: 3px;
+      background: rgba(16, 185, 129, 0.65);
+      border-radius: 1px 1px 0 0;
+      transition: height 0.3s ease;
+      min-height: 1px;
+    }
+    .habit-sparkline-bar-empty { background: rgba(148, 163, 184, 0.18); }
     .record-flash { animation: record-glow 2s ease-out forwards; }
     @keyframes record-glow {
       0% { background: rgba(251,191,36,0.2); border-color: rgba(251,191,36,0.5); }
@@ -1739,77 +1850,80 @@
         <div x-show="habits.length === 0" class="text-xs text-slate-700 italic py-1">Nenhum hábito cadastrado</div>
       </div>
 
-      <!-- Habit rows (hoje) — Apple Fitness ring style -->
-      <div x-show="!showManageHabits" class="flex flex-col gap-2.5">
+      <!-- Habit cards (todos iguais, celebração de semana perfeita) -->
+      <div x-show="!showManageHabits" class="flex flex-col gap-2">
         <template x-for="habit in momentum.habits" :key="habit.habit_id">
-          <div class="flex items-center gap-3">
-            <!-- Ring button: clicável só no dia agendado -->
-            <button
-              @click="habit.is_today_habit ? (habit.proposed ? toggleHabit(habit) : proposeAndCheck(habit)) : null"
-              class="habit-ring"
-              :class="habit.done ? 'habit-ring-done' : (habit.is_today_habit ? 'habit-ring-pending' : 'opacity-35 cursor-default')"
-              :title="habit.is_today_habit ? (habit.done ? 'Desmarcar' : 'Marcar como feito') : 'Não é dia deste hábito hoje — use os chips abaixo'">
-              <span x-show="habit.done" class="text-emerald-400 text-sm font-bold">✓</span>
-              <span x-show="!habit.done" class="text-sm" x-text="habit.icon || '⭐'"></span>
-            </button>
-            <!-- Info -->
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-1.5">
-                <span class="text-sm font-medium truncate"
-                  :class="habit.done ? 'text-emerald-300' : (habit.is_today_habit ? 'text-slate-200' : 'text-slate-400')"
-                  x-text="habit.name"></span>
+          <div class="habit-card" :class="habit.is_perfect_week ? 'habit-card-perfect' : ''">
+            <!-- Header: ícone, nome, streak, badge da semana -->
+            <div class="flex items-center gap-2">
+              <span class="text-base shrink-0" x-text="habit.icon || '⭐'"></span>
+              <div class="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+                <span class="text-sm font-medium text-slate-100 truncate" x-text="habit.name"></span>
+                <span x-show="habit.frequency === 'flex'" class="text-[9px] text-slate-500 font-mono uppercase tracking-wider">
+                  flex <span x-text="habit.weekly_target + 'x'"></span>
+                </span>
                 <span x-show="habit.streak >= 2" class="habit-streak-fire"
                   x-text="'🔥' + habit.streak"></span>
               </div>
-              <!-- Week progress (specific days or flex target) -->
-              <div x-show="habit.week_progress && habit.week_progress.length" class="flex items-center gap-2 mt-1.5 flex-wrap">
-                <template x-for="(p, i) in (habit.week_progress || [])" :key="i">
-                  <div class="flex items-center gap-1"
-                    :class="p.date && !p.is_today ? 'cursor-pointer group/wp' : ''"
-                    :title="p.date && !p.is_today && !p.done ? 'Marcar ' + p.label + ' como feito' : (p.done && p.date && !p.is_today ? 'Desmarcar ' + p.label : '')"
-                    @click="p.date && !p.is_today ? toggleHabitDay(habit, p) : null">
-                    <span x-show="p.label"
-                      class="text-[8px] font-bold uppercase tracking-wider leading-none"
-                      :class="p.is_today ? 'text-cyan-300' : (p.done ? 'text-emerald-400/70' : 'text-slate-600 group-hover/wp:text-slate-400')"
-                      x-text="p.label"></span>
-                    <span class="w-2 h-2 rounded-full transition-all"
-                      :class="{
-                        'bg-emerald-400': p.done,
-                        'bg-slate-800 ring-1 ring-cyan-400/60': !p.done && p.is_today,
-                        'bg-slate-700 group-hover/wp:bg-emerald-900': !p.done && !p.is_today && p.date,
-                        'bg-slate-800': !p.done && !p.is_today && !p.date
-                      }"
-                      :style="p.done && p.is_today ? 'box-shadow:0 0 6px rgba(16,185,129,0.7)' : (p.is_today ? 'box-shadow:0 0 6px rgba(34,211,238,0.4)' : '')"></span>
-                  </div>
-                </template>
-                <!-- Compact difficulty after progress -->
-                <span class="text-[8px] text-slate-700 leading-none">·</span>
-                <div class="flex gap-0.5">
-                  <span class="w-1 h-1 rounded-full"
-                    :class="habit.difficulty >= 1 ? 'bg-emerald-400/60' : 'bg-slate-800'"></span>
-                  <span class="w-1 h-1 rounded-full"
-                    :class="habit.difficulty >= 2 ? 'bg-yellow-400/60' : 'bg-slate-800'"></span>
-                  <span class="w-1 h-1 rounded-full"
-                    :class="habit.difficulty >= 3 ? 'bg-red-400/60' : 'bg-slate-800'"></span>
+              <!-- Badge X/Y -->
+              <span class="habit-week-badge shrink-0"
+                :class="{
+                  'habit-week-badge-perfect': habit.is_perfect_week,
+                  'habit-week-badge-partial': !habit.is_perfect_week && habit.week_done_count > 0,
+                  'habit-week-badge-empty': habit.week_done_count === 0
+                }">
+                <span x-text="habit.week_done_count + '/' + habit.week_target"></span>
+                <span x-show="habit.is_perfect_week"> 🏆</span>
+              </span>
+            </div>
+
+            <!-- Chips de dia (semana inteira visível) -->
+            <div x-show="habit.week_progress && habit.week_progress.length" class="flex items-center gap-1.5 mt-2.5 flex-wrap">
+              <template x-for="(p, i) in (habit.week_progress || [])" :key="i">
+                <div class="habit-day-chip"
+                  :class="{
+                    'habit-day-chip-done': p.status === 'done',
+                    'habit-day-chip-suggested': p.status === 'suggested' || (p.status === 'today' && !p.done),
+                    'habit-day-chip-today': p.status === 'today' && p.done,
+                    'habit-day-chip-missed': p.status === 'missed',
+                    'habit-day-chip-future': p.status === 'future',
+                    'habit-day-chip-open': p.status === 'open'
+                  }"
+                  :title="
+                    p.status === 'done' ? 'Feito — clique pra desmarcar' :
+                    p.status === 'suggested' ? 'Sugerido hoje — clique pra marcar' :
+                    p.status === 'today' ? 'Hoje — clique pra marcar' :
+                    p.status === 'missed' ? 'Não feito — clique pra marcar' :
+                    p.status === 'future' ? 'Próximo' : 'Slot disponível'
+                  "
+                  @click="(p.date && p.status !== 'future' && p.status !== 'open') ? toggleHabitDay(habit, p) : (p.status === 'open' && habit.frequency === 'flex' ? proposeAndCheck(habit) : null)">
+                  <span x-text="p.label || '·'"></span>
+                  <span x-show="p.status === 'done'" class="habit-day-chip-check">✓</span>
+                  <span x-show="p.status === 'suggested' || (p.status === 'today' && !p.done)" class="habit-day-chip-check">💡</span>
+                </div>
+              </template>
+            </div>
+
+            <!-- Sugestão + sparkline -->
+            <div class="flex items-end justify-between gap-2 mt-2">
+              <div class="flex-1 min-w-0">
+                <div x-show="habit.suggestion_text" class="text-[10px] text-amber-300/80 leading-tight"
+                  x-text="'💡 ' + habit.suggestion_text"></div>
+                <div x-show="habit.is_perfect_week" class="text-[10px] text-amber-300 font-medium leading-tight">
+                  🏆 Semana perfeita
                 </div>
               </div>
-              <!-- Fallback: só dificuldade (hábitos daily sem progresso semanal) -->
-              <div x-show="!habit.week_progress || !habit.week_progress.length" class="flex gap-1 mt-1">
-                <span class="w-1.5 h-1.5 rounded-full"
-                  :class="habit.difficulty >= 1 ? 'bg-emerald-400' : 'bg-slate-800'"></span>
-                <span class="w-1.5 h-1.5 rounded-full"
-                  :class="habit.difficulty >= 2 ? 'bg-yellow-400' : 'bg-slate-800'"></span>
-                <span class="w-1.5 h-1.5 rounded-full"
-                  :class="habit.difficulty >= 3 ? 'bg-red-400' : 'bg-slate-800'"></span>
+              <!-- Sparkline 4 semanas -->
+              <div x-show="habit.week_history && habit.week_history.length"
+                class="habit-sparkline shrink-0"
+                :title="'Últimas 4 semanas — mais antiga → atual'">
+                <template x-for="(pct, idx) in (habit.week_history || [])" :key="idx">
+                  <span class="habit-sparkline-bar"
+                    :class="pct === 0 ? 'habit-sparkline-bar-empty' : ''"
+                    :style="'height:' + Math.max(2, pct * 14) + 'px;' + (pct >= 1 ? 'background:#fbbf24' : (pct >= 0.5 ? 'background:rgba(16,185,129,0.85)' : 'background:rgba(16,185,129,0.45)'))"></span>
+                </template>
               </div>
             </div>
-            <!-- Flex propose button -->
-            <button x-show="habit.frequency === 'flex' && !habit.proposed"
-              @click="proposeHabit(habit)"
-              class="text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition-all text-cyan-400 hover:text-cyan-300 active:scale-95 shrink-0"
-              style="border:1px solid rgba(34,211,238,0.3);background:rgba(34,211,238,0.05)">
-              Hoje!
-            </button>
           </div>
         </template>
         <button x-show="momentum.habits.length === 0"
