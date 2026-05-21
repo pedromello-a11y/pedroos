@@ -1,6 +1,8 @@
 import uuid
 import re
 import html
+import os
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -13,8 +15,62 @@ from app.features.refs.schemas import RefCreate, RefUpdate
 from app.shared.dates import now_brt
 
 
+UPLOADS_DIR = os.environ.get("UPLOADS_DIR") or str(
+    Path(__file__).parent.parent.parent.parent / "data" / "uploads"
+)
+
+# Domínios cujas thumbs precisam ser baixadas localmente (CDN bloqueia hotlink
+# ou URLs assinadas expiram em horas/dias).
+_VOLATILE_THUMB_HOSTS = (
+    "cdninstagram.com",
+    "fbcdn.net",
+    "tiktokcdn.com",
+    "tiktokcdn-us.com",
+    "instagram.com",
+)
+
+
 def _short_id() -> str:
     return uuid.uuid4().hex[:6].upper()
+
+
+def _is_volatile_thumb(url: str) -> bool:
+    try:
+        host = urlparse(url).netloc.lower()
+        return any(h in host for h in _VOLATILE_THUMB_HOSTS)
+    except Exception:
+        return False
+
+
+async def _download_thumb(url: str) -> Optional[str]:
+    """Baixa imagem pra /uploads e retorna o path local. None se falhar."""
+    try:
+        os.makedirs(UPLOADS_DIR, exist_ok=True)
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            r = await client.get(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                    # Referer do próprio CDN evita bloqueio anti-hotlink
+                    "Referer": "https://www.instagram.com/",
+                },
+            )
+            if r.status_code != 200 or len(r.content) < 100:
+                return None
+            ctype = r.headers.get("content-type", "image/jpeg").lower()
+            ext = ".jpg"
+            if "png" in ctype:
+                ext = ".png"
+            elif "webp" in ctype:
+                ext = ".webp"
+            elif "gif" in ctype:
+                ext = ".gif"
+            stored = f"thumb_{uuid.uuid4().hex[:12]}{ext}"
+            with open(os.path.join(UPLOADS_DIR, stored), "wb") as f:
+                f.write(r.content)
+            return f"/uploads/{stored}"
+    except Exception:
+        return None
 
 
 def _detect_source_type(url: str) -> tuple[str, str]:
@@ -257,13 +313,21 @@ async def create_ref(db: AsyncSession, data: RefCreate) -> Ref:
     elif not data.url:
         source_type = source_type or "image"
 
+    # Thumbs de CDN com URL assinada (Instagram, TikTok, etc) expiram em horas.
+    # Baixa local pra garantir que a ref sobreviva.
+    thumbnail = data.thumbnail
+    if thumbnail and thumbnail.startswith("http") and _is_volatile_thumb(thumbnail):
+        local = await _download_thumb(thumbnail)
+        if local:
+            thumbnail = local
+
     ref = Ref(
         id=str(uuid.uuid4()),
         short_id=_short_id(),
         url=data.url,
         title=data.title,
         note=data.note,
-        thumbnail=data.thumbnail,
+        thumbnail=thumbnail,
         source_type=source_type,
         domain=domain,
         raw_input=data.raw_input,
