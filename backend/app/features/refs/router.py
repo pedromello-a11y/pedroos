@@ -1,9 +1,12 @@
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 import os
 import uuid
+
+import httpx
 
 from app.db import get_db
 from app.features.refs import service
@@ -48,6 +51,27 @@ async def extract_url(data: dict, db: AsyncSession = Depends(get_db)):
         raise HTTPException(400, "URL obrigatória")
     meta = await service.extract_metadata(url)
     return ExtractResponse(**meta)
+
+
+@router.get("/img-proxy")
+async def img_proxy(url: str = Query(...)):
+    """Proxy de imagem com Referer correto para CDNs que bloqueiam hotlink."""
+    if not url.startswith("http"):
+        raise HTTPException(400, "URL inválida")
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            r = await client.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                "Referer": "https://www.instagram.com/",
+            })
+        if r.status_code != 200:
+            raise HTTPException(502, "Imagem indisponível")
+        ctype = r.headers.get("content-type", "image/jpeg")
+        return Response(content=r.content, media_type=ctype, headers={
+            "Cache-Control": "public, max-age=86400",
+        })
+    except httpx.RequestError:
+        raise HTTPException(502, "Erro ao buscar imagem")
 
 
 @router.post("/upload", status_code=201)
