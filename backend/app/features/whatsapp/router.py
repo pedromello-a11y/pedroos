@@ -22,6 +22,68 @@ from app.features.tasks.sse import broadcast
 from app.shared.dates import now_brt
 from app.shared.responses import format_task_created
 
+async def _handle_ref(text: str, db: AsyncSession) -> str:
+    """Handle 'ref: url' or 'ref board1 board2: url' from WhatsApp."""
+    from app.features.refs.service import create_ref, extract_metadata
+    from app.features.refs.schemas import RefCreate
+
+    lower = text.lower().strip()
+
+    if lower.startswith("ref:"):
+        boards: list[str] = []
+        content = text[4:].strip()
+    else:
+        # "ref transição typo: https://..."
+        after_ref = text[4:].strip()
+        colon_idx = after_ref.find(":")
+        if colon_idx == -1:
+            boards = []
+            content = after_ref
+        else:
+            boards_str = after_ref[:colon_idx].strip()
+            content = after_ref[colon_idx + 1:].strip()
+            boards = [b.strip() for b in boards_str.split() if b.strip()]
+
+    if not content:
+        return "❌ Formato: *ref: link* ou *ref board: link*"
+
+    url = None
+    note = None
+    url_match = re.search(r'(https?://\S+)', content)
+    if url_match:
+        url = url_match.group(1)
+        remaining = content.replace(url, "").strip()
+        if remaining:
+            note = remaining
+    else:
+        note = content
+
+    title = None
+    thumbnail = None
+    source_type = None
+    if url:
+        meta = await extract_metadata(url)
+        title = meta.get("title")
+        thumbnail = meta.get("thumbnail")
+        source_type = meta.get("source_type")
+
+    data = RefCreate(
+        url=url,
+        title=title or (note[:60] if note else None),
+        note=note,
+        thumbnail=thumbnail,
+        source_type=source_type or ("image" if not url else "link"),
+        boards=boards,
+        source="whatsapp",
+        raw_input=text,
+    )
+    ref = await create_ref(db, data)
+
+    boards_str = " → " + ", ".join(f"#{b}" for b in boards) if boards else ""
+    title_str = ref.title[:50] if ref.title else (url[:50] if url else "sem título")
+    return f"📎 Ref salva{boards_str}\n_{title_str}_"
+
+
 _DUMP_TAGS = {
     "ideia": "ideia",
     "decisão": "decisão",
@@ -218,6 +280,13 @@ async def whatsapp_webhook(payload: dict, db: AsyncSession = Depends(get_db)):
         else:
             response_text = "❌ Não entendi. Tente: *evento: Título data hora* (ex: evento: Natação sexta 20h)"
 
+        if from_jid:
+            await send_whatsapp(from_jid, response_text)
+        return {"ok": True, "response": response_text}
+
+    # ── ref: salva referência visual no vault ────────────────────────────
+    if text.lower().startswith("ref:") or text.lower().startswith("ref "):
+        response_text = await _handle_ref(text, db)
         if from_jid:
             await send_whatsapp(from_jid, response_text)
         return {"ok": True, "response": response_text}

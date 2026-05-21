@@ -17,11 +17,38 @@ const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 const PORT = parseInt(process.env.PORT || "3000");
 const AUTH_DIR = process.env.AUTH_DIR || "auth_info_baileys";
 const QR_FILE = process.env.QR_FILE || "/data/qr.txt";
+const MY_JID = process.env.MY_WHATSAPP_JID || null; // ex: "5531999999999@s.whatsapp.net"
+
+// System/bot message types to ignore — these cause crypto noise when processed
+const IGNORED_MESSAGE_TYPES = new Set([
+  "buttonsMessage",
+  "templateMessage",
+  "listMessage",
+  "protocolMessage",
+  "reactionMessage",
+  "stickerMessage",
+  "audioMessage",
+  "imageMessage",
+  "videoMessage",
+  "documentMessage",
+  "contactMessage",
+  "locationMessage",
+  "liveLocationMessage",
+  "pollCreationMessage",
+  "pollUpdateMessage",
+  "callLogMessage",
+  "encReactionMessage",
+  "editedMessage",
+  "keepInChatMessage",
+]);
 
 let sock = null;
+let isConnecting = false;
 let currentQR = null;
 let waConnected = false;
 let alfredGroupJID = process.env.ALFRED_GROUP_JID || null;
+let lastMessageAt = null;
+let sessionStartedAt = null;
 const recentLogs = [];
 
 // ── Express server ──────────────────────────────────────────────────────────
@@ -37,17 +64,34 @@ app.post("/send", async (req, res) => {
   const { to, text } = req.body;
   if (!to || !text) return res.status(400).json({ ok: false, reason: "missing to or text" });
   if (!sock) return res.status(503).json({ ok: false, reason: "not connected" });
-  try {
-    await sock.sendMessage(to, { text, linkPreview: false });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("[send] error:", err.message);
-    res.status(500).json({ ok: false, reason: err.message });
+
+  const MAX_ATTEMPTS = 2;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      await sock.sendMessage(to, { text, linkPreview: false });
+      return res.json({ ok: true });
+    } catch (err) {
+      lastErr = err;
+      console.error(`[send] attempt ${attempt}/${MAX_ATTEMPTS} failed: ${err.message}`);
+      if (attempt < MAX_ATTEMPTS) await sleep(1000 * attempt);
+    }
   }
+  res.status(500).json({ ok: false, reason: lastErr?.message });
 });
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, connected: waConnected, alfred_group: alfredGroupJID });
+  const uptimeSec = Math.floor(process.uptime());
+  const sessionAgeSec = sessionStartedAt
+    ? Math.floor((Date.now() - sessionStartedAt) / 1000)
+    : null;
+  res.json({
+    connected: waConnected,
+    uptime: uptimeSec,
+    last_message_at: lastMessageAt,
+    session_age: sessionAgeSec,
+    alfred_group: alfredGroupJID,
+  });
 });
 
 app.get("/logs", (_req, res) => {
@@ -63,13 +107,8 @@ app.get("/qr", (_req, res) => {
 app.post("/reset", async (_req, res) => {
   console.log("🔄 Reset solicitado — limpando sessão...");
   try {
-    if (sock) {
-      try { sock.ws?.close(); } catch {}
-      sock = null;
-    }
-    waConnected = false;
-    currentQR = null;
-    alfredGroupJID = process.env.ALFRED_GROUP_JID || null;
+    await closeSocket();
+    sessionStartedAt = null;
 
     if (fs.existsSync(AUTH_DIR)) {
       fs.rmSync(AUTH_DIR, { recursive: true, force: true });
@@ -87,6 +126,10 @@ app.post("/reset", async (_req, res) => {
 app.listen(PORT, () => console.log(`🚀 WhatsApp gateway na porta ${PORT}`));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 function extractText(msg) {
   return (
     msg.message?.conversation ||
@@ -95,6 +138,21 @@ function extractText(msg) {
     msg.message?.viewOnceMessage?.message?.extendedTextMessage?.text ||
     ""
   );
+}
+
+function getMessageType(msg) {
+  if (!msg.message) return null;
+  return Object.keys(msg.message).find((k) => k !== "messageContextInfo") || null;
+}
+
+async function closeSocket() {
+  if (sock) {
+    try { sock.ev.removeAllListeners(); } catch {}
+    try { sock.ws?.close(); } catch {}
+    sock = null;
+  }
+  waConnected = false;
+  currentQR = null;
 }
 
 async function discoverAlfredGroup(socket) {
@@ -119,115 +177,154 @@ async function discoverAlfredGroup(socket) {
 
 // ── Baileys connection ───────────────────────────────────────────────────────
 async function connect() {
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-  const { version } = await fetchLatestBaileysVersion();
-
-  const logger = {
-    level: "silent",
-    trace: () => {}, debug: () => {}, info: () => {}, warn: () => {},
-    error: (...args) => console.error(...args),
-    child: () => logger,
-  };
-
-  sock = makeWASocket({
-    version,
-    auth: state,
-    logger,
-    printQRInTerminal: false,
-    syncFullHistory: false,
-    markOnlineOnConnect: false,
-    generateHighQualityLinkPreview: false,
-    getMessage: async () => undefined,
-    cachedGroupMetadata: async () => undefined,
-    transactionOpts: { maxCommitRetries: 1, delayBetweenTriesMs: 10 },
-  });
-  sock.ev.on("creds.update", saveCreds);
-
-  sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      currentQR = qr;
-      waConnected = false;
-      console.log("\nEscaneia o QR code (ou veja no dashboard):\n");
-      qrcodeTerminal.generate(qr, { small: true });
-      try { fs.writeFileSync(QR_FILE, qr); } catch {}
-    }
-
-    if (connection === "open") {
-      currentQR = null;
-      waConnected = true;
-      console.log("✅ WhatsApp conectado!");
-      try { fs.unlinkSync(QR_FILE); } catch {}
-      await discoverAlfredGroup(sock);
-    }
-
-    if (connection === "close") {
-      waConnected = false;
-      const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-      if (reason === DisconnectReason.loggedOut) {
-        console.error("❌ Deslogado. Delete auth_info_baileys/ e reinicie.");
-        process.exit(1);
-      }
-      console.log(`🔄 Reconectando em 3s (razão: ${reason})...`);
-      setTimeout(connect, 3000);
-    }
-  });
-
-  function log(msg) {
-    const entry = { ts: new Date().toISOString(), msg };
-    recentLogs.push(entry);
-    if (recentLogs.length > 100) recentLogs.shift();
-    console.log(msg);
+  if (isConnecting) {
+    console.log("[connect] já está conectando, pulando chamada duplicada");
+    return;
   }
+  isConnecting = true;
 
-  sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    log(`[upsert] type=${type} count=${messages.length}`);
-    if (type !== "notify") return;
+  try {
+    // Reuse existing session — never delete auth dir here
+    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+    const { version } = await fetchLatestBaileysVersion();
 
-    for (const msg of messages) {
-      try {
-        const text = extractText(msg).trim();
-        const jid = msg.key.remoteJid || "";
-        const fromMe = msg.key.fromMe;
-        const participant = msg.key.participant || "";
+    const logger = {
+      level: "silent",
+      trace: () => {}, debug: () => {}, info: () => {}, warn: () => {},
+      error: (...args) => console.error(...args),
+      child: () => logger,
+    };
 
-        if (jid.endsWith("@g.us")) {
-          const tag = alfredGroupJID
-            ? (jid === alfredGroupJID ? "alfred" : "other-group")
-            : "any-group";
-          log(`[wa] fromMe=${fromMe} participant=${participant} group=${tag} hasText=${!!text} text="${text.slice(0, 60)}"`);
-        }
+    sock = makeWASocket({
+      version,
+      auth: state,
+      logger,
+      printQRInTerminal: false,
+      syncFullHistory: false,
+      markOnlineOnConnect: false,
+      generateHighQualityLinkPreview: false,
+      // Returning undefined causes Baileys to lose message keys → "Aguardando mensagem".
+      // Returning null signals "not found but don't retry" — safer than undefined.
+      getMessage: async () => null,
+      cachedGroupMetadata: async () => undefined,
+      transactionOpts: { maxCommitRetries: 1, delayBetweenTriesMs: 10 },
+    });
 
-        if (!text) continue;
-        if (!jid) continue;
+    sock.ev.on("creds.update", saveCreds);
 
-        // Only messages from alfred group
-        if (!jid.endsWith("@g.us")) continue;
-        if (alfredGroupJID && jid !== alfredGroupJID) {
-          log(`[wa] skipped: not alfred group (${jid})`);
-          continue;
-        }
+    sock.ev.on("connection.update", async (update) => {
+      const { connection, lastDisconnect, qr } = update;
 
-        // alfred group is Pedro's private task inbox — accept all messages
-
-        log(`📨 [alfred] "${text}"`);
-
-        await axios.post(
-          `${BACKEND_URL}/api/whatsapp/webhook`,
-          { message_id: msg.key.id, from: jid, text },
-          { timeout: 10_000 }
-        );
-      } catch (err) {
-        log(`[messages.upsert] error: ${err.message}`);
+      if (qr) {
+        currentQR = qr;
+        waConnected = false;
+        console.log("\nEscaneia o QR code (ou veja no dashboard):\n");
+        qrcodeTerminal.generate(qr, { small: true });
+        try { fs.writeFileSync(QR_FILE, qr); } catch {}
       }
+
+      if (connection === "open") {
+        currentQR = null;
+        waConnected = true;
+        sessionStartedAt = Date.now();
+        console.log("✅ WhatsApp conectado!");
+        try { fs.unlinkSync(QR_FILE); } catch {}
+        await discoverAlfredGroup(sock);
+      }
+
+      if (connection === "close") {
+        waConnected = false;
+        const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+        if (reason === DisconnectReason.loggedOut) {
+          console.error("❌ Deslogado. Delete auth_info_baileys/ e reinicie.");
+          process.exit(1);
+        }
+        console.log(`🔄 Reconectando em 3s (razão: ${reason})...`);
+        // Close cleanly before reconnecting to avoid duplicate sockets
+        await closeSocket();
+        setTimeout(connect, 3000);
+      }
+    });
+
+    function log(msg) {
+      const entry = { ts: new Date().toISOString(), msg };
+      recentLogs.push(entry);
+      if (recentLogs.length > 100) recentLogs.shift();
+      console.log(msg);
     }
-  });
+
+    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+      log(`[upsert] type=${type} count=${messages.length}`);
+      if (type !== "notify") return;
+
+      for (const msg of messages) {
+        try {
+          const jid = msg.key.remoteJid || "";
+          const fromMe = msg.key.fromMe;
+          const msgType = getMessageType(msg);
+
+          // 1. Skip system/bot message types
+          if (msgType && IGNORED_MESSAGE_TYPES.has(msgType)) {
+            log(`[wa] ignored: system/bot message type=${msgType} jid=${jid}`);
+            continue;
+          }
+
+          // 2. Validate JID — skip empty
+          if (!jid) {
+            log(`[wa] ignored: empty JID`);
+            continue;
+          }
+
+          // 3. Direct messages: only from MY_JID (or fromMe if MY_JID not set)
+          if (!jid.endsWith("@g.us")) {
+            if (MY_JID && jid !== MY_JID && !fromMe) {
+              log(`[wa] ignored: direct msg from unknown JID ${jid}`);
+              continue;
+            }
+            // Direct messages not in scope for this gateway (group-based workflow)
+            log(`[wa] ignored: direct message from ${jid} (not a group)`);
+            continue;
+          }
+
+          // 4. Group messages: only alfred group
+          if (alfredGroupJID && jid !== alfredGroupJID) {
+            log(`[wa] ignored: wrong group ${jid} (expected ${alfredGroupJID})`);
+            continue;
+          }
+          if (!alfredGroupJID) {
+            log(`[wa] warning: ALFRED_GROUP_JID not set, accepting group ${jid}`);
+          }
+
+          // 5. Require text content
+          const text = extractText(msg).trim();
+          if (!text) {
+            log(`[wa] ignored: no text content (type=${msgType}) jid=${jid}`);
+            continue;
+          }
+
+          lastMessageAt = new Date().toISOString();
+          log(`📨 [alfred] "${text}"`);
+
+          await axios.post(
+            `${BACKEND_URL}/api/whatsapp/webhook`,
+            { message_id: msg.key.id, from: jid, text },
+            { timeout: 10_000 }
+          );
+        } catch (err) {
+          log(`[messages.upsert] error: ${err.message}`);
+        }
+      }
+    });
+  } finally {
+    isConnecting = false;
+  }
 }
 
-process.on("uncaughtException", (err) => {
+process.on("uncaughtException", async (err) => {
   console.error("[uncaughtException]", err.message);
-  // Crypto/noise errors from Baileys during reconnect — restart connection instead of crashing
+  // Close the broken socket before reconnecting to avoid duplicate sockets
+  // with divergent key state — that's what causes "Aguardando mensagem"
+  await closeSocket();
   setTimeout(() => connect().catch(console.error), 3000);
 });
 
