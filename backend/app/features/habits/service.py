@@ -356,9 +356,6 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
             ))
             continue
 
-        if not is_day and not log:
-            continue
-
         streak = await get_habit_streak(db, habit.id, d - timedelta(days=1))
 
         result.append(HabitTodayItem(
@@ -370,7 +367,8 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
             points_done=pts["done"],
             points_missed=abs(pts["missed"]),
             done=log.done if log else 0,
-            proposed=True,
+            proposed=is_day,
+            is_today_habit=is_day,
             streak=streak + (1 if log and log.done else 0),
             week_progress=week_progress,
         ))

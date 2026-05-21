@@ -1743,10 +1743,12 @@
       <div x-show="!showManageHabits" class="flex flex-col gap-2.5">
         <template x-for="habit in momentum.habits" :key="habit.habit_id">
           <div class="flex items-center gap-3">
-            <!-- Ring button -->
-            <button @click="habit.proposed ? toggleHabit(habit) : proposeAndCheck(habit)"
+            <!-- Ring button: clicável só no dia agendado -->
+            <button
+              @click="habit.is_today_habit ? (habit.proposed ? toggleHabit(habit) : proposeAndCheck(habit)) : null"
               class="habit-ring"
-              :class="habit.done ? 'habit-ring-done' : 'habit-ring-pending'">
+              :class="habit.done ? 'habit-ring-done' : (habit.is_today_habit ? 'habit-ring-pending' : 'opacity-35 cursor-default')"
+              :title="habit.is_today_habit ? (habit.done ? 'Desmarcar' : 'Marcar como feito') : 'Não é dia deste hábito hoje — use os chips abaixo'">
               <span x-show="habit.done" class="text-emerald-400 text-sm font-bold">✓</span>
               <span x-show="!habit.done" class="text-sm" x-text="habit.icon || '⭐'"></span>
             </button>
@@ -1754,7 +1756,7 @@
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-1.5">
                 <span class="text-sm font-medium truncate"
-                  :class="habit.done ? 'text-emerald-300' : 'text-slate-200'"
+                  :class="habit.done ? 'text-emerald-300' : (habit.is_today_habit ? 'text-slate-200' : 'text-slate-400')"
                   x-text="habit.name"></span>
                 <span x-show="habit.streak >= 2" class="habit-streak-fire"
                   x-text="'🔥' + habit.streak"></span>
