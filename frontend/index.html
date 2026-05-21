@@ -1063,8 +1063,8 @@
         <button @click="setView('notes')"
           :class="activeView === 'notes' ? (context === 'personal' ? 'ctx-ps' : 'ctx-hm') : 'text-slate-500 hover:text-slate-300'"
           class="text-xs font-bold px-4 py-1.5 rounded-md transition-all">📝 Notas</button>
-        <button @click="setView('refs')"
-          :class="activeView === 'refs' ? (context === 'personal' ? 'ctx-ps' : 'ctx-hm') : 'text-slate-500 hover:text-slate-300'"
+        <button x-show="context !== 'personal'" @click="setView('refs')"
+          :class="activeView === 'refs' ? 'ctx-hm' : 'text-slate-500 hover:text-slate-300'"
           class="text-xs font-bold px-4 py-1.5 rounded-md transition-all">📎 Refs</button>
       </div>
       <span x-show="activeView === 'tasks'" class="text-xs text-slate-600 font-mono" x-text="'· ' + totalDumpCount + ' tarefas'"></span>
@@ -1457,9 +1457,10 @@
           :class="refsUncategorized ? 'bg-ac-10 ac' : 'text-slate-500 hover:text-slate-300'"
           style="border:1px solid var(--border)"
           x-text="'Inbox (' + (refBoards.find(b => b.id === \'__uncategorized__\')?.count || 0) + ')'"></button>
-        <button @click="showAddRef = true"
+        <button @click="quickAddRef()"
           class="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
-          style="background:var(--accent-10);border:1px solid var(--accent-20);color:var(--accent)">+ ref</button>
+          style="background:var(--accent-10);border:1px solid var(--accent-20);color:var(--accent)"
+          x-text="refsQ.match(/^https?:\/\//) ? '+ salvar' : '+ ref'"></button>
       </div>
 
       <!-- Empty state -->
@@ -2920,6 +2921,8 @@ function pedroOS() {
 
     // ── init ──────────────────────────────────────────────────────────────
     async init() {
+      // Refs só existe no Hotmart — se carregou em pessoal com refs, força tasks
+      if (this.context === 'personal' && this.activeView === 'refs') this.activeView = 'tasks';
       this.applyContextColors();
       await this.loadAll();
       this.setupKeyboard();
@@ -3067,6 +3070,8 @@ function pedroOS() {
       this.context = ctx;
       localStorage.setItem('pedro_context', ctx);
       this.applyContextColors();
+      // Refs só existe no contexto Hotmart — se trocar pra pessoal estando em refs, volta pra tarefas
+      if (ctx === 'personal' && this.activeView === 'refs') this.setView('tasks');
     },
 
     applyContextColors() {
@@ -4418,6 +4423,20 @@ function pedroOS() {
         const meta = await this.api('/api/refs/extract', 'POST', { url: this.newRef.url });
         if (meta && !meta._error && meta.title && !this.newRef.title) this.newRef.title = meta.title;
       } catch(e) {}
+    },
+
+    async quickAddRef() {
+      const q = (this.refsQ || '').trim();
+      if (q.match(/^https?:\/\//)) {
+        const res = await this.api('/api/refs', 'POST', { url: q, boards: [] });
+        if (res && !res._error) {
+          this.refsQ = '';
+          this.showToast('📎 Ref salva');
+          await Promise.all([this.loadRefs(), this.loadRefBoards()]);
+        }
+      } else {
+        this.showAddRef = true;
+      }
     },
 
     async saveNewRef() {
