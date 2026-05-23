@@ -1747,7 +1747,7 @@
           class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
           :class="refsUncategorized ? 'bg-ac-10 ac' : 'text-slate-500 hover:text-slate-300'"
           style="border:1px solid var(--border)"
-          x-text="'Inbox (' + (refBoards.find(b => b.id === \'__uncategorized__\')?.count || 0) + ')'"></button>
+          x-text="'Inbox (' + (refBoards.find(b => b.id === '__uncategorized__')?.count || 0) + ')'"></button>
         <button @click="quickAddRef()"
           class="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
           style="background:var(--accent-10);border:1px solid var(--accent-20);color:var(--accent)"
@@ -3645,7 +3645,7 @@ function pedroOS() {
     },
 
     async syncJiraStatus() {
-      const res = await this.api('/api/jira/sync', { method: 'POST' });
+      const res = await this.api('/api/jira/sync', 'POST');
       if (!res || !res.synced?.length) return;
       res.synced.forEach(t => {
         for (const list of [this.tasks, this.todayTasks, this.allTasks]) {
