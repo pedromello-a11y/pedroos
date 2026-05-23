@@ -243,13 +243,97 @@
       border-color: #334155;
       background: rgba(148,163,184,0.08);
     }
-    .task-row-queued {
-      opacity: 0.78;
+    .task-row-radar {
+      opacity: 0.6;
+      border-style: dashed !important;
     }
-    .status-chip-queued {
-      color: #9CA3AF;
-      border-color: #4B5563;
+    .task-row-radar:hover { opacity: 0.9; }
+    .status-chip-radar {
+      color: #64748B;
+      border-color: #334155;
+      border-style: dashed;
+      background: rgba(100,116,139,0.06);
     }
+    .radar-divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 18px 0 8px;
+      color: #475569;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .radar-divider::before, .radar-divider::after {
+      content: '';
+      flex: 1;
+      border-top: 1px dashed var(--border);
+    }
+    /* Hero card "Fazendo agora" */
+    .hero-doing {
+      background: linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(255,255,255,0.02) 100%);
+      border: 1px solid rgba(16,185,129,0.25);
+      border-radius: 14px;
+      padding: 22px 24px;
+      margin-bottom: 22px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-doing::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at 0% 0%, rgba(16,185,129,0.08), transparent 50%);
+    }
+    .hero-doing-title {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.25;
+      color: #E2E8F0;
+    }
+    .hero-doing-project {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #94a3b8;
+    }
+    .hero-doing-note {
+      font-size: 13px;
+      font-style: italic;
+      color: #94a3b8;
+    }
+    .hero-doing-complete {
+      background: rgba(16,185,129,0.15);
+      border: 1px solid rgba(16,185,129,0.4);
+      color: #34d399;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .hero-doing-complete:hover {
+      background: rgba(16,185,129,0.25);
+      transform: translateY(-1px);
+    }
+    .hero-empty {
+      background: rgba(255,255,255,0.015);
+      border: 1px dashed var(--border2);
+      border-radius: 14px;
+      padding: 28px 24px;
+      margin-bottom: 22px;
+      text-align: center;
+      color: #475569;
+    }
+    .play-now-btn {
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s;
+      color: #475569;
+    }
+    .task-row:hover .play-now-btn { opacity: 1; }
+    .play-now-btn:hover { color: #10B981; }
     .task-row-backlog {
       opacity: 0.5;
     }
@@ -946,7 +1030,7 @@
               <div x-show="open" @click.outside="open = false"
                 class="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-2xl overflow-hidden"
                 style="background:var(--card);border:1px solid var(--border2);min-width:110px">
-                <template x-for="s in [{v:'todo',l:'Aguardando'},{v:'doing',l:'Fazendo'},{v:'queued',l:'Na fila'},{v:'backlog',l:'Backlog'}]" :key="s.v">
+                <template x-for="s in [{v:'doing',l:'Fazendo'},{v:'todo',l:'A Fazer'},{v:'radar',l:'No Radar'},{v:'backlog',l:'Backlog'}]" :key="s.v">
                   <button @click="setTaskStatus(task, s.v); reviewInboxTask(task); open = false"
                     class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800">
                     <span class="status-chip" :class="'status-chip-' + s.v" style="pointer-events:none;cursor:default;min-width:0" x-text="s.l"></span>
@@ -1008,9 +1092,9 @@
                 <label class="text-xs text-slate-500 mb-1 block font-semibold">Status</label>
                 <select x-model="draft.status" @change="autosave('status', draft.status)"
                   class="w-full px-2 py-1.5 text-xs">
-                  <option value="todo">Aguardando</option>
                   <option value="doing">Fazendo</option>
-                  <option value="queued">Na fila</option>
+                  <option value="todo">A Fazer</option>
+                  <option value="radar">No Radar</option>
                   <option value="backlog">Backlog</option>
                 </select>
               </div>
@@ -1120,20 +1204,73 @@
         <span x-show="filterProject">Nada em <span class="font-bold" x-text="projects.find(p=>p.slug===filterProject)?.name"></span> por enquanto.</span>
       </div>
 
+      <!-- ═══ HERO: FAZENDO AGORA ═══ -->
+      <template x-if="doingTask">
+        <div class="hero-doing" @click="openModal(doingTask)" style="cursor:pointer">
+          <div class="flex items-center justify-between mb-2 relative" style="z-index:1">
+            <span class="section-label text-emerald-500">● Fazendo agora</span>
+            <span x-show="doingTask.deadline" class="deadline-badge"
+              :class="{
+                'deadline-today': doingTask.deadline === todayStr,
+                'deadline-overdue': doingTask.deadline < todayStr,
+                'deadline-soon': doingTask.deadline > todayStr && daysDiff(doingTask.deadline) <= 7,
+              }"
+              x-text="doingTask.deadline === todayStr ? 'hoje' : formatDate(doingTask.deadline)"></span>
+          </div>
+          <div class="relative" style="z-index:1">
+            <div x-show="doingTask.project_slug" class="hero-doing-project mb-1"
+              x-text="projects.find(p => p.slug === doingTask.project_slug)?.name || ''"></div>
+            <h2 class="hero-doing-title mb-2" x-text="doingTask.title"></h2>
+            <div x-show="doingTask.status_note" class="hero-doing-note mb-3"
+              x-text="'· ' + doingTask.status_note"></div>
+            <div class="flex items-center gap-2 mt-3">
+              <button @click.stop="quickDone(doingTask)" class="hero-doing-complete">✓ Concluir</button>
+              <button @click.stop="setTaskStatus(doingTask, 'todo')"
+                class="text-xs text-slate-500 hover:text-slate-300 px-3 py-2 transition-colors">↻ Trocar foco</button>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template x-if="!doingTask && groupedFlatTasks.length > 0">
+        <div class="hero-empty">
+          <div class="text-sm mb-1">Nenhuma tarefa ativa</div>
+          <div class="text-xs">Escolha uma em <span class="text-amber-500 font-semibold">A Fazer</span> abaixo</div>
+        </div>
+      </template>
+
       <div class="flex flex-col gap-4">
         <template x-for="group in groupedFlatTasks" :key="group.status">
           <div>
-            <div class="flex items-center gap-2 mt-1 mb-2">
-              <span class="section-label" :class="statusGroupLabelClass(group.status)" x-text="statusGroupLabel(group.status)"></span>
-              <span class="text-xs font-mono text-slate-700 ml-1" x-text="'· ' + group.tasks.length"></span>
-              <div class="flex-1 h-px ml-2" style="background:var(--border)"></div>
-            </div>
-            <div class="flex flex-col gap-1.5">
+            <!-- Divisor especial para "No Radar" -->
+            <template x-if="group.status === 'radar'">
+              <div class="radar-divider"><span>┈ no radar ┈</span></div>
+            </template>
+            <!-- Header para backlog (colapsável) -->
+            <template x-if="group.status === 'backlog'">
+              <button @click="backlogExpanded = !backlogExpanded"
+                class="flex items-center gap-2 mt-4 mb-2 text-left w-full">
+                <span class="text-slate-500 text-xs" x-text="backlogExpanded ? '▾' : '▸'"></span>
+                <span class="section-label text-slate-600">Backlog</span>
+                <span class="text-xs font-mono text-slate-700" x-text="'· ' + group.tasks.length"></span>
+                <div class="flex-1 h-px ml-2" style="background:var(--border)"></div>
+              </button>
+            </template>
+            <!-- Header padrão (todo) -->
+            <template x-if="group.status !== 'radar' && group.status !== 'backlog'">
+              <div class="flex items-center gap-2 mt-1 mb-2">
+                <span class="section-label" :class="statusGroupLabelClass(group.status)" x-text="statusGroupLabel(group.status)"></span>
+                <span class="text-xs font-mono text-slate-700 ml-1" x-text="'· ' + group.tasks.length"></span>
+                <div class="flex-1 h-px ml-2" style="background:var(--border)"></div>
+              </div>
+            </template>
+            <div class="flex flex-col gap-1.5"
+              x-show="group.status !== 'backlog' || backlogExpanded"
+              x-transition.opacity>
               <template x-for="task in group.tasks" :key="task.id">
           <div>
             <div @click="openModal(task)" class="task-row group"
               :data-task-id="task.id"
-              :class="[task.status === 'doing' ? 'task-row-doing' : task.status === 'todo' ? 'task-row-todo' : task.status === 'queued' ? 'task-row-queued' : task.status === 'backlog' ? 'task-row-backlog' : '', task.deadline && task.deadline < todayStr && task.status !== 'doing' ? 'overdue-row' : '', _blNestOver === task.id ? 'bl-nest-over' : (_blDragOver === task.id ? 'bl-drag-over' : '')]"
+              :class="[task.status === 'doing' ? 'task-row-doing' : task.status === 'todo' ? 'task-row-todo' : task.status === 'radar' ? 'task-row-radar' : task.status === 'backlog' ? 'task-row-backlog' : '', task.deadline && task.deadline < todayStr && task.status !== 'doing' && task.status !== 'radar' ? 'overdue-row' : '', _blNestOver === task.id ? 'bl-nest-over' : (_blDragOver === task.id ? 'bl-drag-over' : '')]"
               :style="task.deadline && task.deadline < todayStr && task.status !== 'doing' ? 'border-left: 2px solid #EF4444' : ''"
               draggable="true"
               @dragstart="blDragStart($event, task, null)"
@@ -1193,7 +1330,7 @@
                   <div x-show="open" @click.outside="open = false"
                     class="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-2xl overflow-hidden"
                     style="background:var(--card);border:1px solid var(--border2);min-width:90px">
-                    <template x-for="s in ['todo','doing','queued','backlog','done']" :key="s">
+                    <template x-for="s in ['doing','todo','radar','backlog','done']" :key="s">
                       <button @click.stop="setTaskStatus(task, s); open = false"
                         class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
                         :class="task.status === s ? 'bg-slate-800/60' : ''">
@@ -1220,6 +1357,10 @@
                     }"
                     x-text="task.deadline === todayStr && task.status !== 'done' ? 'hoje' : formatDate(task.deadline)"></span>
                 </div>
+                <button x-show="task.status !== 'doing' && task.status !== 'done'"
+                  @click.stop="setNowTask(task)"
+                  class="play-now-btn text-base shrink-0"
+                  title="Fazer agora">▶</button>
                 <button @click.stop="quickDone(task)" class="check-btn shrink-0">✓</button>
               </div>
             </div>
@@ -1228,8 +1369,8 @@
               <div class="flex flex-col gap-1 mt-1">
                 <template x-for="sub in subtasksByParent[task.id]" :key="sub.id">
                   <div @click="openModal(sub)" class="task-row task-row-sub"
-                    :class="[sub.status === 'doing' ? 'task-row-doing' : sub.status === 'todo' ? 'task-row-todo' : sub.status === 'queued' ? 'task-row-queued' : sub.status === 'backlog' ? 'task-row-backlog' : '', _blDragOver === sub.id ? 'bl-drag-over' : '']"
-                    :style="['doing','todo','queued'].includes(sub.status) ? '' : 'border-left:2px solid var(--border2)'"
+                    :class="[sub.status === 'doing' ? 'task-row-doing' : sub.status === 'todo' ? 'task-row-todo' : sub.status === 'radar' ? 'task-row-radar' : sub.status === 'backlog' ? 'task-row-backlog' : '', _blDragOver === sub.id ? 'bl-drag-over' : '']"
+                    :style="['doing','todo','radar'].includes(sub.status) ? '' : 'border-left:2px solid var(--border2)'"
                     draggable="true"
                     @dragstart="blDragStart($event, sub, null)"
                     @dragover.prevent="_blDragOver = sub.id; _blNestOver = null"
@@ -1273,20 +1414,20 @@
                           <div @click.outside="$nextTick(() => _openSubStatus = null)"
                             class="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-2xl overflow-hidden"
                             style="background:var(--card);border:1px solid var(--border2);min-width:90px">
-                            <button @click.stop="setTaskStatus(sub, 'todo'); _openSubStatus = null"
-                              class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
-                              :class="sub.status === 'todo' ? 'bg-slate-800/60' : ''">
-                              <span class="status-chip status-chip-todo" style="pointer-events:none;cursor:default;min-width:0">Aguardando</span>
-                            </button>
-                            <button @click.stop="setTaskStatus(sub, 'doing'); _openSubStatus = null"
+                            <button @click.stop="setNowTask(sub); _openSubStatus = null"
                               class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
                               :class="sub.status === 'doing' ? 'bg-slate-800/60' : ''">
                               <span class="status-chip status-chip-doing" style="pointer-events:none;cursor:default;min-width:0">Fazendo</span>
                             </button>
-                            <button @click.stop="setTaskStatus(sub, 'queued'); _openSubStatus = null"
+                            <button @click.stop="setTaskStatus(sub, 'todo'); _openSubStatus = null"
                               class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
-                              :class="sub.status === 'queued' ? 'bg-slate-800/60' : ''">
-                              <span class="status-chip status-chip-queued" style="pointer-events:none;cursor:default;min-width:0">Na fila</span>
+                              :class="sub.status === 'todo' ? 'bg-slate-800/60' : ''">
+                              <span class="status-chip status-chip-todo" style="pointer-events:none;cursor:default;min-width:0">A Fazer</span>
+                            </button>
+                            <button @click.stop="setTaskStatus(sub, 'radar'); _openSubStatus = null"
+                              class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
+                              :class="sub.status === 'radar' ? 'bg-slate-800/60' : ''">
+                              <span class="status-chip status-chip-radar" style="pointer-events:none;cursor:default;min-width:0">No Radar</span>
                             </button>
                             <button @click.stop="setTaskStatus(sub, 'backlog'); _openSubStatus = null"
                               class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800"
@@ -2311,9 +2452,9 @@
           </select>
           <select x-model="modal.task.status" @change="modalAutosave('status', modal.task.status)"
             class="px-2 py-1.5 text-xs">
-            <option value="todo">🟡 Aguardando</option>
-            <option value="doing">🟠 Fazendo</option>
-            <option value="queued">⚪ Na fila</option>
+            <option value="doing">🟢 Fazendo</option>
+            <option value="todo">🟡 A Fazer</option>
+            <option value="radar">🔵 No Radar</option>
             <option value="backlog">⬜ Backlog</option>
             <option value="done">✅ Feita</option>
           </select>
@@ -2854,6 +2995,7 @@ function pedroOS() {
 
     // data
     inbox: [], inboxExpanded: false,
+    backlogExpanded: false,
     todayTasks: [], overdue: [],
     allTasks: [],
     projects: [],
@@ -3399,42 +3541,58 @@ function pedroOS() {
         raw:     'text-slate-600 border-slate-700',
         todo:    'status-chip-todo',
         doing:   'status-chip-doing',
-        queued:  'status-chip-queued',
+        radar:   'status-chip-radar',
         backlog: 'status-chip-backlog',
         done:    'text-emerald-500 border-emerald-900',
       }[status] || 'status-chip-backlog';
     },
 
     statusLabel(status) {
-      return { raw: '— definir', todo: 'Aguardando', doing: 'Fazendo', queued: 'Na fila', backlog: 'Backlog', done: 'Feita' }[status] || status;
+      return { raw: '— definir', todo: 'A Fazer', doing: 'Fazendo', radar: 'No Radar', backlog: 'Backlog', done: 'Feita' }[status] || status;
     },
 
     statusHtml(status) {
-      const labels = { raw: '— definir', todo: 'Aguardando', doing: 'Fazendo', queued: 'Na fila', backlog: 'Backlog', done: 'Feita' };
+      const labels = { raw: '— definir', todo: 'A Fazer', doing: 'Fazendo', radar: 'No Radar', backlog: 'Backlog', done: 'Feita' };
       return labels[status] || status;
     },
 
     statusGroupLabel(status) {
-      return { doing: 'Fazendo', todo: 'Aguardando', queued: 'Na fila', backlog: 'Backlog' }[status] || status;
+      return { doing: 'Fazendo', todo: 'A Fazer', radar: 'No Radar', backlog: 'Backlog' }[status] || status;
     },
 
     statusGroupLabelClass(status) {
-      return { doing: 'text-emerald-700', todo: 'text-amber-700', queued: 'text-slate-600', backlog: 'text-slate-700' }[status] || 'text-slate-600';
+      return { doing: 'text-emerald-700', todo: 'text-amber-700', radar: 'text-slate-600', backlog: 'text-slate-700' }[status] || 'text-slate-600';
     },
 
     get filteredInbox() {
       return this.inbox.filter(t => this.taskMatchesContext(t));
     },
 
+    get doingTask() {
+      return this.flatTasks.find(t => t.status === 'doing' && t.status !== 'done') || null;
+    },
+
     get groupedFlatTasks() {
-      const order = ['doing', 'todo', 'queued', 'backlog'];
-      const tasks = this.flatTasks.filter(t => t.status !== 'done');
+      // doing fica fora — vai pro hero card acima
+      const order = ['todo', 'radar', 'backlog'];
+      const tasks = this.flatTasks.filter(t => t.status !== 'done' && t.status !== 'doing');
       const groups = {};
       for (const t of tasks) {
         if (!groups[t.status]) groups[t.status] = [];
         groups[t.status].push(t);
       }
       return order.filter(s => groups[s]?.length).map(s => ({ status: s, tasks: groups[s] }));
+    },
+
+    async setNowTask(task) {
+      // Promove pra "doing"; backend rebaixa qualquer outra que estivesse doing
+      task.status = 'doing';
+      const result = await this.api(`/api/tasks/${task.id}/set-now`, 'POST');
+      // Sincroniza qualquer outra task que estivesse doing
+      for (const t of this.allTasks) {
+        if (t.id !== task.id && t.status === 'doing') t.status = 'todo';
+      }
+      if (result && result.status) task.status = result.status;
     },
 
     isPending(status) { return /pending/i.test(status); },

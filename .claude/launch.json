@@ -3,8 +3,9 @@
   "configurations": [
     {
       "name": "backend",
-      "runtimeExecutable": "uvicorn",
-      "runtimeArgs": ["app.main:app", "--reload", "--port", "8000"],
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--reload", "--port", "8000"],
+      "cwd": "backend",
       "port": 8000
     },
     {
