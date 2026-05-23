@@ -334,6 +334,80 @@
     }
     .task-row:hover .play-now-btn { opacity: 1; }
     .play-now-btn:hover { color: #10B981; }
+
+    /* Visão semanal */
+    .day-column {
+      background: rgba(255,255,255,0.015);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .day-column-today {
+      border-color: rgba(255,90,31,0.35);
+      background: rgba(255,90,31,0.03);
+    }
+    .day-column-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .day-name {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+    }
+    .day-column-today .day-name { color: #FF7A45; }
+    .day-num {
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+    .day-timeline {
+      position: relative;
+      background: linear-gradient(to bottom, transparent 0%, transparent 99%, var(--border) 100%);
+      border-left: 1px solid var(--border);
+      padding-left: 4px;
+    }
+    .week-meeting {
+      position: absolute;
+      left: 4px;
+      right: 0;
+      background: rgba(99,102,241,0.15);
+      border-left: 2px solid #6366f1;
+      border-radius: 3px;
+      padding: 2px 4px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      gap: 1px;
+      color: #c7d2fe;
+    }
+    .week-deadline {
+      position: absolute;
+      bottom: 0;
+      left: 4px;
+      right: 0;
+      background: rgba(251,146,60,0.12);
+      border-left: 2px solid #f97316;
+      border-radius: 3px;
+      padding: 2px 4px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      gap: 1px;
+      color: #fdba74;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .week-deadline:hover { background: rgba(251,146,60,0.22); }
     .task-row-backlog {
       opacity: 0.5;
     }
@@ -1469,6 +1543,56 @@
           </div>
         </template>
       </div>
+
+      <!-- ═══ VISÃO SEMANAL ═══ -->
+      <section x-show="context === 'hotmart' && flatTasks.length > 0" class="mt-10">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="section-label text-slate-500">📅 Semana</span>
+            <span class="text-xs font-mono text-slate-700" x-text="weekLabel()"></span>
+          </div>
+          <div class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+            <button @click="shiftWeek(-1)" class="text-slate-600 hover:text-slate-300 px-1">‹</button>
+            <button @click="weekOffset = 0; loadWeekMeetings()" class="text-slate-500 hover:text-slate-300"
+              :class="weekOffset === 0 ? 'text-cyan-400' : ''">hoje</button>
+            <button @click="shiftWeek(1)" class="text-slate-600 hover:text-slate-300 px-1">›</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-5 gap-2" style="min-height:280px">
+          <template x-for="day in weekDays" :key="day.iso">
+            <div class="day-column"
+              :class="day.iso === localTodayIso ? 'day-column-today' : ''">
+              <div class="day-column-header">
+                <span class="day-name" x-text="day.label"></span>
+                <span class="day-num" x-text="day.num"></span>
+              </div>
+              <div class="day-timeline" style="height:240px" x-data="{
+                startH: 8, endH: 20,
+                topPct(t) { if (!t) return 0; const [h,m] = t.split(':').map(Number); return ((h*60 + m) - this.startH*60) / ((this.endH-this.startH)*60) * 100; },
+                heightPct(start, end) { if (!start || !end) return 4; const dur = this.topPct(end) - this.topPct(start); return Math.max(dur, 4); }
+              }">
+                <!-- Meetings (blocos cinza/azul) -->
+                <template x-for="ev in (weekMeetings[day.iso] || [])" :key="ev.id || ev.start_time + ev.title">
+                  <div class="week-meeting" :title="ev.title + ' · ' + ev.start_time"
+                    :style="'top:' + topPct(ev.start_time) + '%; height:' + heightPct(ev.start_time, ev.end_time) + '%'">
+                    <span class="text-[8px] opacity-70" x-text="ev.start_time"></span>
+                    <span class="text-[9px] truncate" x-text="ev.title"></span>
+                  </div>
+                </template>
+                <!-- Deadlines (marcador laranja proporcional a estimated_hours) -->
+                <template x-for="task in (weekTasksByDay[day.iso] || [])" :key="'tk-' + task.id">
+                  <div class="week-deadline" @click="openModal(task)"
+                    :style="'height:' + Math.max((task.estimated_hours || 1) * 8, 18) + '%'"
+                    :title="task.title + (task.estimated_hours ? ' · ' + task.estimated_hours + 'h' : '')">
+                    <span class="text-[9px]">▼</span>
+                    <span class="text-[9px] truncate" x-text="task.title"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
 
       <!-- CONCLUÍDAS -->
       <div x-show="showDone" class="mt-8">
@@ -3040,6 +3164,8 @@ function pedroOS() {
     // data
     inbox: [], inboxExpanded: false,
     backlogExpanded: false,
+    weekMeetings: {},
+    weekOffset: 0,
     todayTasks: [], overdue: [],
     allTasks: [],
     projects: [],
@@ -3260,6 +3386,7 @@ function pedroOS() {
         this.loadToday(),
         this.loadAllTasks(),
         this.loadMeetings(),
+        this.loadWeekMeetings(),
         this.loadJira(),
         this.loadPersonalCalendar(),
         this.loadPendingEvents(),
@@ -3336,6 +3463,64 @@ function pedroOS() {
       if (!res) return;
       if (res.connected || !this.calConnected) this.calConnected = !!res.connected;
       if (res.connected) this.meetings = res.events || [];
+    },
+
+    get weekDays() {
+      // Segunda-sexta da semana (com weekOffset semanas de deslocamento). Horário local.
+      const _DAYS = ['SEG','TER','QUA','QUI','SEX'];
+      const now = new Date();
+      const dow = (now.getDay() + 6) % 7; // 0=seg, 6=dom
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - dow + this.weekOffset * 7);
+      const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      return _DAYS.map((label, i) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        return { iso: fmt(d), label, num: String(d.getDate()).padStart(2, '0') };
+      });
+    },
+
+    get localTodayIso() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    },
+
+    get weekTasksByDay() {
+      const map = {};
+      for (const t of this.flatTasks) {
+        if (!t.deadline || t.status === 'done') continue;
+        if (!map[t.deadline]) map[t.deadline] = [];
+        map[t.deadline].push(t);
+      }
+      return map;
+    },
+
+    weekLabel() {
+      const days = this.weekDays;
+      if (!days.length) return '';
+      const fmt = iso => {
+        const [, m, d] = iso.split('-');
+        return `${d}/${m}`;
+      };
+      return `${fmt(days[0].iso)}–${fmt(days[4].iso)}`;
+    },
+
+    async loadWeekMeetings() {
+      const days = this.weekDays;
+      const results = await Promise.all(
+        days.map(d => this.api(`/api/meetings/today?date=${d.iso}`).catch(() => null))
+      );
+      const map = {};
+      days.forEach((d, i) => {
+        const r = results[i];
+        map[d.iso] = (r && r.connected) ? (r.events || []) : [];
+      });
+      this.weekMeetings = map;
+    },
+
+    async shiftWeek(delta) {
+      this.weekOffset = Math.max(-4, Math.min(4, this.weekOffset + delta));
+      await this.loadWeekMeetings();
     },
 
     async loadPersonalCalendar() {
