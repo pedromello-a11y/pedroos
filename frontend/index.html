@@ -1003,16 +1003,15 @@
   <!-- ═════ MAIN: INBOX + DUMP ═════════════════════════════════════════════ -->
   <main>
 
-    <!-- INBOX (only when items exist) -->
-    <section x-show="filteredInbox.length > 0" class="mb-7">
+    <!-- INBOX (só aparece em modo edição expandida; compact mode mora na sidebar) -->
+    <section x-show="filteredInbox.length > 0 && inboxExpanded" class="mb-7">
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2">
-          <span class="section-label">📥 Inbox</span>
+          <span class="section-label">📥 Revisar inbox</span>
           <span class="text-xs font-bold ac font-mono" x-text="filteredInbox.length"></span>
         </div>
-        <button @click="inboxExpanded = !inboxExpanded"
-          class="text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
-          x-text="inboxExpanded ? '— recolher' : '+ expandir'"></button>
+        <button @click="inboxExpanded = false"
+          class="text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors">— fechar</button>
       </div>
 
       <!-- Compact mode -->
@@ -1866,6 +1865,51 @@
         <p class="text-xl font-bold text-slate-500 font-mono" x-text="currentTime"></p>
       </div>
     </div>
+
+    <!-- INBOX compacto (sidebar) -->
+    <section x-show="filteredInbox.length > 0" class="pb-3" style="border-bottom:1px solid var(--border)">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span class="section-label text-amber-500">📥 Inbox</span>
+          <span class="text-xs font-bold font-mono text-amber-500" x-text="filteredInbox.length"></span>
+        </div>
+        <button @click="inboxExpanded = true"
+          class="text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-amber-400 transition-colors"
+          title="Abrir modo edição">revisar →</button>
+      </div>
+      <div class="flex flex-col gap-1">
+        <template x-for="task in filteredInbox.slice(0, 6)" :key="task.id">
+          <div x-data="{ open: false }" class="flex items-center gap-1.5 py-1 px-1.5 rounded hover:bg-slate-800/40 transition-colors group">
+            <span class="w-1 h-1 rounded-full shrink-0"
+              :style="'background:' + (getProjectContext(task.project_slug) === 'personal' ? '#22D3EE' : '#FF5A1F')"></span>
+            <span @click="openModal(task)" class="text-xs text-slate-300 truncate flex-1 cursor-pointer"
+              x-text="task.title || task.raw_input || '(sem título)'"></span>
+            <div class="relative shrink-0" @click.stop>
+              <button @click="open = !open"
+                class="text-[9px] font-bold uppercase tracking-wider text-slate-600 hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                + status
+              </button>
+              <div x-show="open" @click.outside="open = false"
+                class="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-2xl overflow-hidden"
+                style="background:var(--card);border:1px solid var(--border2);min-width:90px">
+                <template x-for="s in [{v:'doing',l:'Fazendo'},{v:'todo',l:'A Fazer'},{v:'radar',l:'No Radar'},{v:'backlog',l:'Backlog'}]" :key="s.v">
+                  <button @click="setTaskStatus(task, s.v); reviewInboxTask(task); open = false"
+                    class="flex items-center justify-center w-full px-2 py-1.5 transition-colors hover:bg-slate-800">
+                    <span class="status-chip" :class="'status-chip-' + s.v" style="pointer-events:none;cursor:default;min-width:0" x-text="s.l"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+            <button @click.stop="discardInboxTask(task)"
+              class="text-slate-700 hover:text-red-400 text-sm leading-none px-1 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Apagar">×</button>
+          </div>
+        </template>
+        <button x-show="filteredInbox.length > 6" @click="inboxExpanded = true"
+          class="text-[10px] text-slate-600 hover:text-slate-400 mt-1 text-center transition-colors"
+          x-text="'+ ' + (filteredInbox.length - 6) + ' mais...'"></button>
+      </div>
+    </section>
 
     <!-- MEETINGS TIMELINE (combined work + personal) -->
     <div x-show="context !== 'personal'" x-data="{
