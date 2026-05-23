@@ -70,6 +70,14 @@ async def review_task(task_id: str, db: AsyncSession = Depends(get_db)):
     return task
 
 
+@router.post("/{task_id}/set-now", response_model=TaskResponse)
+async def set_now(task_id: str, db: AsyncSession = Depends(get_db)):
+    task = await service.set_now_task(db, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+    return task
+
+
 @router.post("/{task_id}/done", response_model=TaskResponse)
 async def done_task(task_id: str, db: AsyncSession = Depends(get_db)):
     task = await service.done_task(db, task_id)

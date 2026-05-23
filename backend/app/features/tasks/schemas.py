@@ -9,7 +9,7 @@ class TaskCreate(BaseModel):
     project_slug: Optional[str] = None
     deadline: Optional[str] = None
     priority: Literal["p1", "p2", "p3", "backlog"] = "p3"
-    status: Literal["raw", "todo", "doing", "queued", "backlog", "done"] = "queued"
+    status: Literal["raw", "todo", "doing", "radar", "backlog", "done"] = "todo"
     reviewed: int = 1
     source: Literal["whatsapp", "dashboard", "jira"] = "dashboard"
     parent_id: Optional[str] = None
@@ -23,7 +23,7 @@ class TaskUpdate(BaseModel):
     project_slug: Optional[str] = None
     deadline: Optional[str] = None
     priority: Optional[Literal["p1", "p2", "p3", "backlog"]] = None
-    status: Optional[Literal["raw", "todo", "doing", "queued", "backlog", "done"]] = None
+    status: Optional[Literal["raw", "todo", "doing", "radar", "backlog", "done"]] = None
     reviewed: Optional[int] = None
     snoozed_until: Optional[str] = None
     parent_id: Optional[str] = None

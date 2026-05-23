@@ -126,12 +126,37 @@ async def list_tasks(
     return list(result.scalars().all())
 
 
+async def _demote_other_doing(db: AsyncSession, keep_task_id: str) -> None:
+    """Garante que só 1 tarefa esteja em 'doing'. Rebaixa as outras pra 'todo'."""
+    res = await db.execute(select(Task).where(Task.status == "doing", Task.id != keep_task_id))
+    now = now_brt().isoformat()
+    for other in res.scalars().all():
+        other.status = "todo"
+        other.updated_at = now
+
+
 async def update_task(db: AsyncSession, task_id: str, data: TaskUpdate) -> Optional[Task]:
     task = await get_task(db, task_id)
     if not task:
         return None
-    for field, value in data.model_dump(exclude_unset=True).items():
+    payload = data.model_dump(exclude_unset=True)
+    for field, value in payload.items():
         setattr(task, field, value)
+    task.updated_at = now_brt().isoformat()
+    if payload.get("status") == "doing":
+        await _demote_other_doing(db, task.id)
+    await db.commit()
+    await db.refresh(task)
+    return task
+
+
+async def set_now_task(db: AsyncSession, task_id: str) -> Optional[Task]:
+    """Promove tarefa para 'doing' e rebaixa qualquer outra que estivesse 'doing'."""
+    task = await get_task(db, task_id)
+    if not task:
+        return None
+    await _demote_other_doing(db, task.id)
+    task.status = "doing"
     task.updated_at = now_brt().isoformat()
     await db.commit()
     await db.refresh(task)

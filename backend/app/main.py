@@ -66,6 +66,11 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("ALTER TABLE tasks ADD COLUMN effort INTEGER DEFAULT 1"))
         except Exception:
             pass
+        # Migração de status: queued (antigo "Na fila") vira todo (novo "A Fazer")
+        try:
+            await conn.execute(text("UPDATE tasks SET status = 'todo' WHERE status = 'queued'"))
+        except Exception:
+            pass
         try:
             await conn.execute(text("ALTER TABLE habits ADD COLUMN icon TEXT DEFAULT '⭐'"))
         except Exception:

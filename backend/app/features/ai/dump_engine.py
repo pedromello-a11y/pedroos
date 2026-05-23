@@ -34,7 +34,7 @@ RESPONDA EM JSON:
       "action": "create_task|update_task|just_note",
       "related_task_id": null,
       "related_task_title": null,
-      "suggested_status": "queued|backlog",
+      "suggested_status": "todo|radar|backlog",
       "deadline_hint": null
     }
   ],
@@ -109,7 +109,7 @@ async def confirm_dump(db: AsyncSession, dump_id: int, confirmed_items: list | N
     now = now_brt().isoformat()
 
     _PRIO_MAP = {"high": "p1", "p1": "p1", "medium": "p2", "p2": "p2", "low": "p3", "p3": "p3", "backlog": "backlog"}
-    _STATUS_OK = {"queued", "backlog", "todo"}
+    _STATUS_OK = {"todo", "radar", "backlog"}
 
     for item in items:
         if item.get("action") == "create_task":

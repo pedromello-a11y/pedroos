@@ -20,8 +20,8 @@ async def build_context_prompt(db: AsyncSession) -> str:
     tasks = res.scalars().all()
 
     doing = [t for t in tasks if t.status == "doing"]
-    queued = [t for t in tasks if t.status == "queued"]
     todo = [t for t in tasks if t.status == "todo"]
+    radar = [t for t in tasks if t.status == "radar"]
     backlog = [t for t in tasks if t.status == "backlog"]
 
     # Tarefas atrasadas
@@ -74,18 +74,18 @@ async def build_context_prompt(db: AsyncSession) -> str:
             lines.append(f"  · {t.title} (prazo era {t.deadline})")
         lines.append("")
 
-    if queued:
-        lines.append("🔵 NA FILA:")
-        for t in queued[:8]:
+    if todo:
+        lines.append("🟡 A FAZER:")
+        for t in todo[:8]:
             dl = f" [{t.deadline}]" if t.deadline else ""
             lines.append(f"  · {t.title}{dl}")
         lines.append("")
 
-    if todo:
-        lines.append("🟡 AGUARDANDO:")
-        for t in todo[:8]:
-            dl = f" [{t.deadline}]" if t.deadline else ""
-            lines.append(f"  · {t.title}{dl}")
+    if radar:
+        lines.append("🔵 NO RADAR (aguardando alguém/algo):")
+        for t in radar[:8]:
+            note = f" — {t.status_note}" if t.status_note else ""
+            lines.append(f"  · {t.title}{note}")
         lines.append("")
 
     if backlog:
