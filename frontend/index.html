@@ -408,6 +408,31 @@
       transition: background 0.15s;
     }
     .week-deadline:hover { background: rgba(251,146,60,0.22); }
+
+    @media (max-width: 768px) {
+      .hero-doing { padding: 16px 18px; margin-bottom: 14px; }
+      .hero-doing-title { font-size: 17px; }
+      .hero-empty { padding: 14px 16px; margin-bottom: 14px; }
+      .week-grid-scroll {
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        margin: 0 -16px;
+        padding: 0 16px;
+        scrollbar-width: none;
+      }
+      .week-grid-scroll::-webkit-scrollbar { display: none; }
+      .week-grid-scroll > .week-grid-inner {
+        display: flex !important;
+        gap: 10px;
+        width: max-content;
+      }
+      .week-grid-scroll > .week-grid-inner > .day-column {
+        scroll-snap-align: start;
+        min-width: 200px;
+        width: 200px;
+      }
+    }
     .task-row-backlog {
       opacity: 0.5;
     }
@@ -1558,7 +1583,8 @@
             <button @click="shiftWeek(1)" class="text-slate-600 hover:text-slate-300 px-1">›</button>
           </div>
         </div>
-        <div class="grid grid-cols-5 gap-2" style="min-height:280px">
+        <div class="week-grid-scroll">
+         <div class="grid grid-cols-5 gap-2 week-grid-inner" style="min-height:280px">
           <template x-for="day in weekDays" :key="day.iso">
             <div class="day-column"
               :class="day.iso === localTodayIso ? 'day-column-today' : ''">
@@ -1591,6 +1617,7 @@
               </div>
             </div>
           </template>
+         </div>
         </div>
       </section>
 
