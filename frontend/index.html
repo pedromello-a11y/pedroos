@@ -8021,7 +8021,7 @@ function pedroOS() {
       document.addEventListener('keydown', (e) => {
         if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
         if (this.modal.show) { if (e.key === 'Escape') this.closeModal(); return; }
-        if (e.key.toLowerCase() === 'n') this.$nextTick(() => this.$refs.quickCapture?.focus());
+        if (e.key.toLowerCase() === 'n') this.$nextTick(() => (this.$refs.quickCapture || document.querySelector('[x-ref="quickCapture"]'))?.focus());
         if (e.key.toLowerCase() === 'g') window.dispatchEvent(new CustomEvent('pedroos:open-calendar-composer'));
         if (e.key.toLowerCase() === 'h') this.setContext('hotmart');
         if (e.key.toLowerCase() === 'p') this.setContext('personal');

@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # Agenda pessoal (Google Calendar ID para escrita via OAuth2)
     personal_calendar_id: str = ""
 
+    # Oura Ring (OAuth2)
+    oura_client_id: str = ""
+    oura_client_secret: str = ""
+    oura_refresh_token: str = ""  # pre-configurado no Fly.io, evita fluxo OAuth manual
+    oura_redirect_uri: str = "https://pedroos.fly.dev/api/health/oura/callback"
+
     class Config:
         env_file = ".env"
         extra = "ignore"

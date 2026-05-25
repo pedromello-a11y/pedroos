@@ -1,4 +1,5 @@
 import re
+import datetime
 from datetime import date, timedelta
 
 import httpx
@@ -360,6 +361,220 @@ async def whatsapp_webhook(payload: dict, db: AsyncSession = Depends(get_db)):
         else:
             names = ", ".join(h.name for h in habits)
             response_text = f"❓ Hábito '{habit_name}' não encontrado. Ativos: {names}"
+
+        if from_jid:
+            await send_whatsapp(from_jid, response_text)
+        return {"ok": True, "response": response_text}
+
+    # ── checkin: registra check-in mental rápido ──────────────────────────
+    # Formato: "checkin: 7 4 2"  (mood energia stress)
+    # Ou:      "checkin: 7"      (só mood)
+    if text.lower().strip().startswith("checkin:") or text.lower().strip().startswith("check-in:"):
+        parts_raw = text.split(":", 1)[1].strip().split()
+        nums = []
+        for p in parts_raw:
+            try:
+                nums.append(int(p))
+            except ValueError:
+                pass
+
+        if not nums:
+            response_text = "❌ Formato: *checkin: 7 4 2* (humor 1-10, energia 1-5, estresse 1-5)"
+        else:
+            mood = max(1, min(10, nums[0]))
+            energy = max(1, min(5, nums[1])) if len(nums) > 1 else None
+            stress = max(1, min(5, nums[2])) if len(nums) > 2 else None
+
+            from app.features.health.models import MentalCheckin as _MC
+            from sqlalchemy import select as _sel
+            today_str = now_brt().date().isoformat()
+
+            res_ci = await db.execute(_sel(_MC).where(_MC.date == today_str))
+            existing_ci = res_ci.scalar_one_or_none()
+
+            import uuid as _uuid_mod
+            import json as _json_mod
+
+            # Calcula streak
+            streak = 0
+            for i in range(1, 366):
+                check_d = (now_brt().date() - __import__('datetime').timedelta(days=i)).isoformat()
+                res_s = await db.execute(_sel(_MC.id).where(_MC.date == check_d))
+                if not res_s.scalar_one_or_none():
+                    break
+                streak += 1
+            streak += 1
+
+            if existing_ci:
+                existing_ci.mood = mood
+                if energy is not None:
+                    existing_ci.energy = energy
+                if stress is not None:
+                    existing_ci.stress = stress
+                ci_streak = existing_ci.streak or streak
+            else:
+                new_ci = _MC(
+                    id=str(_uuid_mod.uuid4()),
+                    date=today_str,
+                    mood=mood,
+                    energy=energy,
+                    stress=stress,
+                    streak=streak,
+                    source="whatsapp",
+                    created_at=now_brt().isoformat(),
+                )
+                db.add(new_ci)
+                ci_streak = streak
+
+            await db.commit()
+
+            # Recalcula score do dia
+            try:
+                from app.features.health.score_engine import calculate_daily_score
+                await calculate_daily_score(db, today_str)
+            except Exception:
+                pass
+
+            mood_emojis = {1: "😫", 2: "😔", 3: "😕", 4: "🙁", 5: "😐", 6: "🙂", 7: "😊", 8: "😄", 9: "🤩", 10: "🌟"}
+            mood_emoji = mood_emojis.get(mood, "😐")
+            streak_str = f"\n🔥 Check-in #{ci_streak}" if ci_streak > 1 else ""
+
+            response_text = f"{mood_emoji} Humor {mood}/10"
+            if energy:
+                response_text += f" · Energia {energy}/5"
+            if stress:
+                response_text += f" · Estresse {stress}/5"
+            response_text += f"{streak_str}\n_Registrado. Obrigado pelo check-in!_"
+
+        if from_jid:
+            await send_whatsapp(from_jid, response_text)
+        return {"ok": True, "response": response_text}
+
+    # ── remedio: registra tomada de medicamento ────────────────────────────
+    # Formato: "remedio: zolpidem 1"  ou  "remedio: ritalina"
+    if text.lower().strip().startswith("remedio:") or text.lower().strip().startswith("remédio:"):
+        med_text = text.split(":", 1)[1].strip()
+        parts_med = med_text.split()
+        med_name_query = " ".join(parts_med[:-1]) if len(parts_med) > 1 and parts_med[-1].replace(".", "").isdigit() else med_text
+        try:
+            qty = float(parts_med[-1]) if len(parts_med) > 1 and parts_med[-1].replace(".", "").isdigit() else 1.0
+        except ValueError:
+            qty = 1.0
+            med_name_query = med_text
+
+        from app.features.health.models import Medication as _MedM, MedicationLog as _MedLog
+        from sqlalchemy import select as _sel
+        import uuid as _uuid_mod
+
+        res_meds = await db.execute(_sel(_MedM).where(_MedM.active == 1))
+        all_meds = res_meds.scalars().all()
+        matched_med = next(
+            (m for m in all_meds if med_name_query.lower() in m.name.lower()),
+            None,
+        )
+
+        if not matched_med:
+            names = ", ".join(m.name for m in all_meds)
+            response_text = f"❓ Medicamento '{med_name_query}' não encontrado.\nCadastrados: {names or 'nenhum'}"
+        else:
+            today_str = now_brt().date().isoformat()
+            log_entry = _MedLog(
+                id=str(_uuid_mod.uuid4()),
+                medication_id=matched_med.id,
+                date=today_str,
+                quantity=qty,
+                time=now_brt().strftime("%H:%M"),
+                note="via whatsapp",
+            )
+            db.add(log_entry)
+            await db.commit()
+
+            # Verifica dias consecutivos
+            from app.features.health.alert_engine import _count_consecutive_med_days
+            consec = await _count_consecutive_med_days(db, today_str, matched_med.id)
+            dose_str = f"{qty}x " if qty != 1.0 else ""
+            response_text = f"💊 {dose_str}{matched_med.name} registrado ({now_brt().strftime('%H:%M')})"
+            if matched_med.alert_days and consec >= matched_med.alert_days - 1:
+                response_text += f"\n⚠️ {consec} dias consecutivos — fique atento."
+
+        if from_jid:
+            await send_whatsapp(from_jid, response_text)
+        return {"ok": True, "response": response_text}
+
+    # ── remedios: lista status de medicamentos hoje ────────────────────────
+    if text.lower().strip() in ("remedios", "remédios", "meds", "medicamentos"):
+        from app.features.health.models import Medication as _MedM, MedicationLog as _MedLog
+        from sqlalchemy import select as _sel, func as _func
+
+        today_str = now_brt().date().isoformat()
+        res_meds = await db.execute(_sel(_MedM).where(_MedM.active == 1).order_by(_MedM.position))
+        meds = res_meds.scalars().all()
+
+        if not meds:
+            response_text = "Nenhum medicamento cadastrado. Adicione pelo dashboard."
+        else:
+            response_text = f"💊 *Medicamentos — {today_str}*\n"
+            for med in meds:
+                res_log = await db.execute(
+                    _sel(_func.sum(_MedLog.quantity)).where(
+                        _MedLog.medication_id == med.id,
+                        _MedLog.date == today_str,
+                    )
+                )
+                taken = res_log.scalar() or 0
+                pct = min(100, int(taken / max(1, med.daily_target) * 100))
+                bar = "█" * (pct // 20) + "░" * (5 - pct // 20)
+                status = "✅" if taken >= med.daily_target else ("⚠️" if taken > 0 else "⬜")
+                response_text += f"\n{status} {med.name}: {taken:.0f}/{med.daily_target:.0f} [{bar}]"
+
+        if from_jid:
+            await send_whatsapp(from_jid, response_text)
+        return {"ok": True, "response": response_text}
+
+    # ── como estou: mostra Pedro Score + dimensões ─────────────────────────
+    if text.lower().strip() in ("como estou", "como to", "saude", "saúde", "pedro score", "meu score"):
+        from app.features.health.models import HealthScore as _HS, HealthAlert as _HA
+        from sqlalchemy import select as _sel, func as _func
+
+        today_str = now_brt().date().isoformat()
+        res_hs = await db.execute(_sel(_HS).where(_HS.date == today_str))
+        hs = res_hs.scalar_one_or_none()
+
+        res_alerts = await db.execute(
+            _sel(_func.count()).where(_HA.active == 1, _HA.acknowledged == 0)
+        )
+        alert_count = res_alerts.scalar() or 0
+
+        if not hs or hs.score_total is None:
+            response_text = (
+                "📊 *Pedro Score* — sem dados para hoje ainda.\n"
+                "Faça um check-in: *checkin: 7 4 2*\n"
+                "O score é calculado às 10h e 23h50."
+            )
+        else:
+            def _score_bar(score):
+                if score is None:
+                    return "░░░░░"
+                filled = min(5, int(score / 20))
+                return "█" * filled + "░" * (5 - filled)
+
+            def _score_emoji(score):
+                if score is None: return "⬜"
+                if score >= 75: return "🟢"
+                if score >= 50: return "🟡"
+                return "🔴"
+
+            total = hs.score_total
+            response_text = (
+                f"📊 *Pedro Score* — {total:.0f}/100 {_score_emoji(total)}\n\n"
+                f"🧬 Corpo    {_score_bar(hs.score_body)} {hs.score_body:.0f if hs.score_body else '–'}\n"
+                f"🧠 Mente    {_score_bar(hs.score_mind)} {hs.score_mind:.0f if hs.score_mind else '–'}\n"
+                f"🏃 Movimento {_score_bar(hs.score_movement)} {hs.score_movement:.0f if hs.score_movement else '–'}\n"
+                f"⚡ Produtiv. {_score_bar(hs.score_productivity)} {hs.score_productivity:.0f if hs.score_productivity else '–'}\n"
+                f"💊 Autocuid. {_score_bar(hs.score_selfcare)} {hs.score_selfcare:.0f if hs.score_selfcare else '–'}"
+            )
+            if alert_count:
+                response_text += f"\n\n⚠️ {alert_count} alerta(s) ativo(s) — veja no dashboard."
 
         if from_jid:
             await send_whatsapp(from_jid, response_text)

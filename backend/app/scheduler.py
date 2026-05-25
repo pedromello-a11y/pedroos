@@ -443,6 +443,101 @@ async def _run_scheduler():
                 except Exception as ci_exc:
                     logger.error(f"[scheduler] erro no check-in: {ci_exc}")
 
+            # ── Health jobs ────────────────────────────────────────────────
+            # Sync Oura + calcular score + alertas — 10:00
+            key_health_am = f"health_am_{today}"
+            if h == 10 and m == 0 and key_health_am not in sent:
+                try:
+                    from app.features.health.oura_sync import sync_daily
+                    from app.features.health.score_engine import calculate_daily_score
+                    from app.features.health.alert_engine import check_alerts
+                    from app.db import AsyncSessionLocal as _HS
+                    async with _HS() as hdb:
+                        await sync_daily(hdb, days_back=2)
+                        await calculate_daily_score(hdb)
+                        await check_alerts(hdb)
+                    sent.add(key_health_am)
+                    logger.info("[scheduler] health sync AM concluído")
+                except Exception as e:
+                    logger.error(f"[scheduler] erro health AM: {e}")
+
+            # Score final + alertas — 23:50
+            key_health_pm = f"health_pm_{today}"
+            if h == 23 and m == 50 and key_health_pm not in sent:
+                try:
+                    from app.features.health.oura_sync import sync_daily
+                    from app.features.health.score_engine import calculate_daily_score
+                    from app.features.health.alert_engine import check_alerts
+                    from app.db import AsyncSessionLocal as _HS
+                    async with _HS() as hdb:
+                        await sync_daily(hdb, days_back=1)
+                        await calculate_daily_score(hdb)
+                        await check_alerts(hdb)
+                    sent.add(key_health_pm)
+                    logger.info("[scheduler] health score PM calculado")
+                except Exception as e:
+                    logger.error(f"[scheduler] erro health PM: {e}")
+
+            # Correlações — domingo 04:00 (usa domingo=6)
+            key_correlations = f"correlations_{today}"
+            if now.weekday() == 6 and h == 4 and m == 0 and key_correlations not in sent:
+                try:
+                    from app.features.health.correlation_engine import calculate_correlations
+                    from app.db import AsyncSessionLocal as _HS
+                    async with _HS() as hdb:
+                        await calculate_correlations(hdb, days=30)
+                    sent.add(key_correlations)
+                    logger.info("[scheduler] correlações calculadas")
+                except Exception as e:
+                    logger.error(f"[scheduler] erro correlações: {e}")
+
+            # Atualizar baseline de medicação — segunda 03:30
+            key_med_baseline = f"med_baseline_{today}"
+            if now.weekday() == 0 and h == 3 and m == 30 and key_med_baseline not in sent:
+                try:
+                    from app.db import AsyncSessionLocal as _HS
+                    from sqlalchemy import select as _sel, func as _func
+                    from app.features.health.models import Medication, MedicationLog
+                    start_30 = (now.date() - __import__('datetime').timedelta(days=30)).isoformat()
+                    async with _HS() as hdb:
+                        res_meds = await hdb.execute(_sel(Medication).where(Medication.active == 1))
+                        for med in res_meds.scalars().all():
+                            res_logs = await hdb.execute(
+                                _sel(_func.avg(MedicationLog.quantity)).where(
+                                    MedicationLog.medication_id == med.id,
+                                    MedicationLog.date >= start_30,
+                                )
+                            )
+                            avg = res_logs.scalar()
+                            if avg is not None:
+                                med.baseline_30d = round(float(avg), 2)
+                        await hdb.commit()
+                    sent.add(key_med_baseline)
+                    logger.info("[scheduler] baseline de medicação atualizado")
+                except Exception as e:
+                    logger.error(f"[scheduler] erro baseline medicação: {e}")
+
+            # Lembrete de check-in — 22:00 se não fez hoje
+            key_checkin_reminder = f"checkin_remind_{today}"
+            if h == 22 and m == 0 and key_checkin_reminder not in sent:
+                try:
+                    from app.db import AsyncSessionLocal as _HS
+                    from sqlalchemy import select as _sel
+                    from app.features.health.models import MentalCheckin
+                    async with _HS() as hdb:
+                        res_ci = await hdb.execute(_sel(MentalCheckin).where(MentalCheckin.date == today))
+                        if not res_ci.scalar_one_or_none():
+                            await send_whatsapp(
+                                target_jid,
+                                "🧠 *Check-in do dia* — como você tá?\n\n"
+                                "Manda: *checkin: 7 4 2* (humor 1-10, energia 1-5, estresse 1-5)\n"
+                                "Ou acessa o dashboard → aba Saúde."
+                            )
+                    sent.add(key_checkin_reminder)
+                    logger.info("[scheduler] lembrete de check-in enviado")
+                except Exception as e:
+                    logger.error(f"[scheduler] erro lembrete check-in: {e}")
+
             # Análise de padrões — toda segunda às 03:00 (silencioso)
             key_patterns = f"patterns_{today}"
             if now.weekday() == 0 and h == 3 and m == 0 and key_patterns not in sent:
