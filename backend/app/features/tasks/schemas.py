@@ -100,6 +100,8 @@ class TaskResponse(BaseModel):
     actual_hours: Optional[float] = None
     position: Optional[int] = None
     remind_at: Optional[str] = None
+    doing_since: Optional[str] = None
+    time_spent_minutes: int = 0
     effort: int = 1
     source: str
     created_at: str
@@ -128,3 +130,16 @@ class TaskDetailResponse(TaskResponse):
     subtasks: List[TaskResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+class TaskWithSideEffects(TaskResponse):
+    """Resposta dos endpoints que podem causar efeitos colaterais (ex: WIP cap rebaixando tasks)."""
+    demoted: List[TaskResponse] = []
+
+    model_config = {"from_attributes": True}
+
+
+class UndoCapDemotion(BaseModel):
+    """Body do undo: trigger volta pro backlog, restored voltam pra todo (sem aplicar cap)."""
+    trigger_id: str
+    restored_ids: List[str]

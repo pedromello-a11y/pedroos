@@ -5,10 +5,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.features.tasks import service
 from app.features.tasks.schemas import (
-    TaskCreate, TaskUpdate, TaskResponse, TaskDetailResponse,
+    TaskCreate, TaskUpdate, TaskResponse, TaskDetailResponse, TaskWithSideEffects,
     ChecklistItemCreate, ChecklistItemUpdate, ChecklistItemResponse,
     TaskLinkCreate, TaskLinkResponse, SnoozeRequest, TaskImageResponse,
+    UndoCapDemotion,
 )
+
+
+def _wrap_demoted(task) -> TaskWithSideEffects:
+    """Bundle a task com possíveis tasks rebaixadas pelo WIP cap."""
+    payload = TaskWithSideEffects.model_validate(task)
+    payload.demoted = [TaskResponse.model_validate(t) for t in getattr(task, "_demoted", []) or []]
+    return payload
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 checklist_router = APIRouter(prefix="/api/checklist", tags=["checklist"])
@@ -31,9 +39,10 @@ async def list_tasks(
     )
 
 
-@router.post("", response_model=TaskResponse, status_code=201)
+@router.post("", response_model=TaskWithSideEffects, status_code=201)
 async def create_task(data: TaskCreate, db: AsyncSession = Depends(get_db)):
-    return await service.create_task(db, data)
+    task = await service.create_task(db, data)
+    return _wrap_demoted(task)
 
 
 @router.get("/{task_id}", response_model=TaskDetailResponse)
@@ -48,12 +57,12 @@ async def get_task(task_id: str, db: AsyncSession = Depends(get_db)):
     return result
 
 
-@router.patch("/{task_id}", response_model=TaskResponse)
+@router.patch("/{task_id}", response_model=TaskWithSideEffects)
 async def update_task(task_id: str, data: TaskUpdate, db: AsyncSession = Depends(get_db)):
     task = await service.update_task(db, task_id, data)
     if not task:
         raise HTTPException(status_code=404, detail="Tarefa não encontrada")
-    return task
+    return _wrap_demoted(task)
 
 
 @router.delete("/{task_id}", status_code=204)
@@ -62,20 +71,20 @@ async def delete_task(task_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Tarefa não encontrada")
 
 
-@router.post("/{task_id}/review", response_model=TaskResponse)
+@router.post("/{task_id}/review", response_model=TaskWithSideEffects)
 async def review_task(task_id: str, db: AsyncSession = Depends(get_db)):
     task = await service.review_task(db, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Tarefa não encontrada")
-    return task
+    return _wrap_demoted(task)
 
 
-@router.post("/{task_id}/set-now", response_model=TaskResponse)
+@router.post("/{task_id}/set-now", response_model=TaskWithSideEffects)
 async def set_now(task_id: str, db: AsyncSession = Depends(get_db)):
     task = await service.set_now_task(db, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Tarefa não encontrada")
-    return task
+    return _wrap_demoted(task)
 
 
 @router.post("/{task_id}/done", response_model=TaskResponse)
@@ -84,6 +93,15 @@ async def done_task(task_id: str, db: AsyncSession = Depends(get_db)):
     if not task:
         raise HTTPException(status_code=404, detail="Tarefa não encontrada")
     return task
+
+
+@router.post("/undo-cap-demotion")
+async def undo_cap_demotion(data: UndoCapDemotion, db: AsyncSession = Depends(get_db)):
+    res = await service.undo_cap_demotion(db, data.trigger_id, data.restored_ids)
+    return {
+        "trigger": TaskResponse.model_validate(res["trigger"]) if res["trigger"] else None,
+        "restored": [TaskResponse.model_validate(t) for t in res["restored"]],
+    }
 
 
 @router.post("/{task_id}/snooze", response_model=TaskResponse)

@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
     from app.features.shopping.models import ShoppingItem  # noqa: F401
     from app.features.ai.models import FocusSession, BrainDump, AIMemory, CheckIn, DailyReview  # noqa: F401
     from app.features.refs.models import Ref, RefBoard, RefBoardItem  # noqa: F401
+    from app.features.focus_mode.models import FocusModeSession  # noqa: F401
 
     os.makedirs("data", exist_ok=True)
 
@@ -64,6 +65,25 @@ async def lifespan(app: FastAPI):
             pass
         try:
             await conn.execute(text("ALTER TABLE tasks ADD COLUMN effort INTEGER DEFAULT 1"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE tasks ADD COLUMN doing_since TEXT"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE tasks ADD COLUMN time_spent_minutes INTEGER DEFAULT 0"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE pending_calendar_events ADD COLUMN recurrence TEXT DEFAULT 'none'"))
+        except Exception:
+            pass
+        # backfill: tasks already in 'doing' sem doing_since recebem updated_at como aproximação
+        try:
+            await conn.execute(text(
+                "UPDATE tasks SET doing_since = updated_at WHERE status = 'doing' AND doing_since IS NULL"
+            ))
         except Exception:
             pass
         # Migração de status: queued (antigo "Na fila") vira todo (novo "A Fazer")
@@ -112,6 +132,14 @@ async def lifespan(app: FastAPI):
             db.add(Habit(id="habit-corrida", name="Corrida", icon="🏃", frequency="flex", difficulty=2, active=1, created_at=now))
             await db.commit()
 
+    # WIP cap pessoal: alinha legado ao novo limite de 4 'todo'
+    async with AsyncSessionLocal() as db:
+        from app.features.tasks.service import _enforce_personal_todo_cap
+        demoted = await _enforce_personal_todo_cap(db)
+        if demoted:
+            await db.commit()
+            print(f"[wip-cap] rebaixadas {demoted} tasks pessoais excedentes pro backlog")
+
     from app.scheduler import start_scheduler
     start_scheduler()
 
@@ -138,6 +166,7 @@ from app.features.habits.router import router as habits_router
 from app.features.shopping.router import router as shopping_router
 from app.features.ai.router import router as ai_router
 from app.features.refs.router import router as refs_router, boards_router as ref_boards_router
+from app.features.focus_mode.router import router as focus_mode_router
 
 app.include_router(tasks_router)
 app.include_router(checklist_router)
@@ -153,6 +182,7 @@ app.include_router(shopping_router)
 app.include_router(ai_router)
 app.include_router(refs_router)
 app.include_router(ref_boards_router)
+app.include_router(focus_mode_router)
 
 
 UPLOADS_DIR = os.environ.get("UPLOADS_DIR") or os.path.join(os.path.dirname(__file__), "..", "data", "uploads")

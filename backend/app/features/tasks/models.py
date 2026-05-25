@@ -30,6 +30,8 @@ class Task(Base):
     effort = Column(Integer, default=1)  # 1=baixo, 2=médio, 3=alto
 
     remind_at = Column(Text)
+    doing_since = Column(Text)
+    time_spent_minutes = Column(Integer, default=0)
     source = Column(Text, default="dashboard")
     created_at = Column(Text, nullable=False)
     reviewed_at = Column(Text)

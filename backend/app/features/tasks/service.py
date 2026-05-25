@@ -1,6 +1,6 @@
 import os
 from typing import Optional
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 
@@ -11,6 +11,29 @@ from app.features.tasks.schemas import (
 )
 from app.shared.ids import make_id, make_short_id
 from app.shared.dates import now_brt, today_brt
+
+
+_SESSION_CAP_MINUTES = 360  # 6h — corner case se cron 19h/22h falhar
+
+
+def _accumulate_doing_time(task: Task) -> int:
+    """Soma o tempo da sessão atual (desde doing_since) em time_spent_minutes.
+    Cap de 6h por sessão. Retorna minutos adicionados. Limpa doing_since."""
+    if not task or not task.doing_since:
+        return 0
+    try:
+        start = datetime.fromisoformat(task.doing_since)
+    except (ValueError, TypeError):
+        task.doing_since = None
+        return 0
+    elapsed_min = int((now_brt() - start).total_seconds() / 60)
+    if elapsed_min <= 0:
+        task.doing_since = None
+        return 0
+    credited = min(elapsed_min, _SESSION_CAP_MINUTES)
+    task.time_spent_minutes = (task.time_spent_minutes or 0) + credited
+    task.doing_since = None
+    return credited
 
 
 async def create_task(db: AsyncSession, data: TaskCreate) -> Task:
@@ -43,8 +66,13 @@ async def create_task(db: AsyncSession, data: TaskCreate) -> Task:
         reviewed_at=now if data.reviewed == 1 else None,
     )
     db.add(task)
+    await db.flush()
+    demoted: list[Task] = []
+    if task.status == "todo" and _task_context(task.project_slug) == "personal":
+        demoted = await _enforce_personal_todo_cap(db)
     await db.commit()
     await db.refresh(task)
+    task._demoted = demoted  # attr transient — pydantic ignora _
     return task
 
 
@@ -126,27 +154,79 @@ async def list_tasks(
     return list(result.scalars().all())
 
 
+_PERSONAL_KEYWORDS = ("pessoal", "personal", "vida", "casa", "saude", "hobby")
+
+_PERSONAL_TODO_CAP = 4
+
+
+def _task_context(project_slug: str | None) -> str:
+    """Mesma lógica do frontend getProjectContext: sem slug = hotmart; keywords pessoais = personal."""
+    if not project_slug:
+        return "hotmart"
+    s = project_slug.lower()
+    return "personal" if any(k in s for k in _PERSONAL_KEYWORDS) else "hotmart"
+
+
+def _priority_weight(p: str | None) -> int:
+    return {"p1": 3, "p2": 2, "p3": 1, "backlog": 0}.get(p or "", 1)
+
+
+async def _enforce_personal_todo_cap(db: AsyncSession) -> list[Task]:
+    """Mantém no máximo _PERSONAL_TODO_CAP tasks pessoais com status='todo'.
+    Rebaixa excedentes para 'backlog' (menor prioridade primeiro, depois mais antigas).
+    Retorna lista das tasks rebaixadas. Não toca em subtasks."""
+    res = await db.execute(select(Task).where(Task.status == "todo", Task.parent_id.is_(None)))
+    all_todo = list(res.scalars().all())
+    personal = [t for t in all_todo if _task_context(t.project_slug) == "personal"]
+    excess = len(personal) - _PERSONAL_TODO_CAP
+    if excess <= 0:
+        return []
+    personal.sort(key=lambda t: (_priority_weight(t.priority), t.created_at or ""))
+    now = now_brt().isoformat()
+    demoted = personal[:excess]
+    for t in demoted:
+        t.status = "backlog"
+        t.updated_at = now
+    return demoted
+
+
 async def _demote_other_doing(db: AsyncSession, keep_task_id: str) -> None:
-    """Garante que só 1 tarefa esteja em 'doing'. Rebaixa as outras pra 'todo'."""
+    """Garante só 1 'doing' POR CONTEXTO (personal vs hotmart). Rebaixa as outras pra 'todo'."""
+    keep = await db.get(Task, keep_task_id)
+    if not keep:
+        return
+    keep_ctx = _task_context(keep.project_slug)
     res = await db.execute(select(Task).where(Task.status == "doing", Task.id != keep_task_id))
     now = now_brt().isoformat()
     for other in res.scalars().all():
-        other.status = "todo"
-        other.updated_at = now
+        if _task_context(other.project_slug) == keep_ctx:
+            _accumulate_doing_time(other)
+            other.status = "todo"
+            other.updated_at = now
 
 
 async def update_task(db: AsyncSession, task_id: str, data: TaskUpdate) -> Optional[Task]:
     task = await get_task(db, task_id)
     if not task:
         return None
+    prev_status = task.status
     payload = data.model_dump(exclude_unset=True)
     for field, value in payload.items():
         setattr(task, field, value)
-    task.updated_at = now_brt().isoformat()
-    if payload.get("status") == "doing":
+    now = now_brt().isoformat()
+    task.updated_at = now
+    new_status = payload.get("status")
+    if new_status == "doing" and prev_status != "doing":
+        task.doing_since = now
         await _demote_other_doing(db, task.id)
+    elif new_status is not None and new_status != "doing" and prev_status == "doing":
+        _accumulate_doing_time(task)
+    demoted: list[Task] = []
+    if task.status == "todo" and _task_context(task.project_slug) == "personal":
+        demoted = await _enforce_personal_todo_cap(db)
     await db.commit()
     await db.refresh(task)
+    task._demoted = demoted
     return task
 
 
@@ -156,10 +236,16 @@ async def set_now_task(db: AsyncSession, task_id: str) -> Optional[Task]:
     if not task:
         return None
     await _demote_other_doing(db, task.id)
+    now = now_brt().isoformat()
+    if task.status != "doing":
+        task.doing_since = now
     task.status = "doing"
-    task.updated_at = now_brt().isoformat()
+    task.updated_at = now
+    # _demote_other_doing pode ter empurrado tasks para 'todo' (pessoal): aplicar cap
+    demoted = await _enforce_personal_todo_cap(db)
     await db.commit()
     await db.refresh(task)
+    task._demoted = demoted
     return task
 
 
@@ -182,8 +268,12 @@ async def review_task(db: AsyncSession, task_id: str) -> Optional[Task]:
         task.updated_at = now_brt().isoformat()
         if task.status in (None, 'raw'):
             task.status = 'todo'
+        demoted: list[Task] = []
+        if task.status == "todo" and _task_context(task.project_slug) == "personal":
+            demoted = await _enforce_personal_todo_cap(db)
         await db.commit()
         await db.refresh(task)
+        task._demoted = demoted
     return task
 
 
@@ -191,12 +281,37 @@ async def done_task(db: AsyncSession, task_id: str) -> Optional[Task]:
     task = await get_task(db, task_id)
     if not task:
         return None
+    if task.doing_since:
+        _accumulate_doing_time(task)
     task.status = "done"
     task.completed_at = now_brt().isoformat()
     task.updated_at = now_brt().isoformat()
     await db.commit()
     await db.refresh(task)
     return task
+
+
+async def undo_cap_demotion(db: AsyncSession, trigger_id: str, restored_ids: list[str]) -> dict:
+    """Reverte um rebaixamento por WIP cap:
+    - trigger (a task que causou o cap) volta pra 'backlog'
+    - restored (as que tinham sido empurradas) voltam pra 'todo'
+    NÃO aplica o cap de novo (essa é a vontade explícita do usuário)."""
+    now = now_brt().isoformat()
+    out = {"trigger": None, "restored": []}
+    trigger = await get_task(db, trigger_id)
+    if trigger:
+        trigger.status = "backlog"
+        trigger.doing_since = None
+        trigger.updated_at = now
+        out["trigger"] = trigger
+    for rid in restored_ids:
+        t = await get_task(db, rid)
+        if t:
+            t.status = "todo"
+            t.updated_at = now
+            out["restored"].append(t)
+    await db.commit()
+    return out
 
 
 async def snooze_task(db: AsyncSession, task_id: str, days: int = 1) -> Optional[Task]:
@@ -328,6 +443,22 @@ async def delete_image(db: AsyncSession, image_id: str) -> bool:
     await db.delete(img)
     await db.commit()
     return True
+
+
+async def auto_deactivate_doing(db: AsyncSession) -> list[Task]:
+    """Varre tasks em 'doing', acumula tempo da sessão, demote pra 'todo'.
+    Usado pelo scheduler às 19h (com notificação) e 22h (silencioso safety net)."""
+    res = await db.execute(select(Task).where(Task.status == "doing"))
+    tasks = list(res.scalars().all())
+    if not tasks:
+        return []
+    now = now_brt().isoformat()
+    for t in tasks:
+        _accumulate_doing_time(t)
+        t.status = "todo"
+        t.updated_at = now
+    await db.commit()
+    return tasks
 
 
 async def get_last_wa_task(db: AsyncSession, within_seconds: int = 3600) -> Optional[Task]:

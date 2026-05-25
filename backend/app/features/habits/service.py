@@ -139,16 +139,9 @@ async def mark_habit(db: AsyncSession, habit_id: str, d: date = None, done: int 
 
     pts = _get_points(habit.difficulty)
 
-    # Weekly-target flex habits
+    # Weekly-target flex habits — permite exceder a meta (bônus)
     if habit.weekly_target and habit.frequency == "flex":
         if done == 1:
-            week_done = await _count_week_done(db, habit_id, d)
-            if week_done >= habit.weekly_target:
-                last = await db.execute(
-                    select(HabitLog).where(HabitLog.habit_id == habit_id, HabitLog.done == 1)
-                    .order_by(HabitLog.created_at.desc()).limit(1)
-                )
-                return last.scalar_one_or_none()
             log = HabitLog(
                 id=str(uuid.uuid4()),
                 habit_id=habit_id,
@@ -221,8 +214,9 @@ async def get_habit_streak(db: AsyncSession, habit_id: str, from_date: date = No
         if habit.frequency == "flex":
             log_res = await db.execute(
                 select(HabitLog).where(HabitLog.habit_id == habit_id, HabitLog.date == d_str)
+                .order_by(HabitLog.done.desc()).limit(1)
             )
-            log = log_res.scalar_one_or_none()
+            log = log_res.scalars().first()
             if log:
                 if log.done:
                     streak += 1
@@ -232,8 +226,9 @@ async def get_habit_streak(db: AsyncSession, habit_id: str, from_date: date = No
         elif is_day:
             log_res = await db.execute(
                 select(HabitLog).where(HabitLog.habit_id == habit_id, HabitLog.date == d_str)
+                .order_by(HabitLog.done.desc()).limit(1)
             )
-            log = log_res.scalar_one_or_none()
+            log = log_res.scalars().first()
             if log and log.done:
                 streak += 1
             elif d < from_date:
@@ -260,9 +255,9 @@ async def _get_habit_week_days(db: AsyncSession, habit: Habit, ref_date: date) -
                 HabitLog.habit_id == habit.id,
                 HabitLog.date == d_str,
                 HabitLog.done == 1,
-            )
+            ).limit(1)
         )
-        log = result.scalar_one_or_none()
+        log = result.scalars().first()
 
         days.append(HabitWeekDay(
             date=d_str,
@@ -287,8 +282,9 @@ async def get_habits_for_date(db: AsyncSession, d: date = None) -> list[HabitTod
 
         log_result = await db.execute(
             select(HabitLog).where(HabitLog.habit_id == habit.id, HabitLog.date == date_str)
+            .order_by(HabitLog.done.desc()).limit(1)
         )
-        log = log_result.scalar_one_or_none()
+        log = log_result.scalars().first()
 
         week_days = await _get_habit_week_days(db, habit, d)
 

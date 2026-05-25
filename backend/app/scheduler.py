@@ -361,6 +361,43 @@ async def _run_scheduler():
                     sent.add(key_eod)
                     logger.info("[scheduler] resumo fim do dia enviado")
 
+            # Auto-deactivate "doing" — 19:00 com notificação
+            key_deact_19 = f"deact19_{today}"
+            if h == 19 and m == 0 and key_deact_19 not in sent:
+                try:
+                    from app.features.tasks.service import auto_deactivate_doing
+                    from app.db import AsyncSessionLocal as _DeactSession
+                    async with _DeactSession() as deact_db:
+                        deactivated = await auto_deactivate_doing(deact_db)
+                    if deactivated:
+                        titles = "\n".join(f"• {t.title}" for t in deactivated[:5])
+                        extra = f"\n(+{len(deactivated)-5} outras)" if len(deactivated) > 5 else ""
+                        msg = (
+                            f"🌙 *19h — fim do expediente*\n\n"
+                            f"Desativei {len(deactivated)} task(s) em andamento:\n{titles}{extra}\n\n"
+                            f"Se ainda tá trabalhando, reativa no dashboard. "
+                            f"Senão, descansa 🤝"
+                        )
+                        await send_whatsapp(target_jid, msg)
+                    sent.add(key_deact_19)
+                    logger.info("[scheduler] auto-deactivate 19h: %d tasks", len(deactivated))
+                except Exception as e:
+                    logger.error(f"[scheduler] erro no auto-deactivate 19h: {e}")
+
+            # Safety net silencioso — 22:00
+            key_deact_22 = f"deact22_{today}"
+            if h == 22 and m == 0 and key_deact_22 not in sent:
+                try:
+                    from app.features.tasks.service import auto_deactivate_doing
+                    from app.db import AsyncSessionLocal as _DeactSession
+                    async with _DeactSession() as deact_db:
+                        deactivated = await auto_deactivate_doing(deact_db)
+                    sent.add(key_deact_22)
+                    if deactivated:
+                        logger.info("[scheduler] auto-deactivate 22h (safety): %d tasks", len(deactivated))
+                except Exception as e:
+                    logger.error(f"[scheduler] erro no auto-deactivate 22h: {e}")
+
             # Revisão semanal — segunda 09:00
             key_weekly = f"weekly_{today}"
             if now.weekday() == 0 and h == 9 and m == 0 and key_weekly not in sent:

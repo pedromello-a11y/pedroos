@@ -294,7 +294,15 @@ async def meetings_personal(date: str | None = None):
 
 # ─── Google Calendar — criar evento ──────────────────────────────────────────
 
-async def create_personal_event(title: str, event_date: str, event_time: str, duration_hours: float = 1.0) -> dict:
+_RECURRENCE_RRULE = {
+    "daily":    "RRULE:FREQ=DAILY",
+    "weekly":   "RRULE:FREQ=WEEKLY",
+    "biweekly": "RRULE:FREQ=WEEKLY;INTERVAL=2",
+    "monthly":  "RRULE:FREQ=MONTHLY",
+}
+
+
+async def create_personal_event(title: str, event_date: str, event_time: str, duration_hours: float = 1.0, recurrence: str = "none") -> dict:
     """Cria evento no calendário Particular do Google (PERSONAL_CALENDAR_ID)."""
     access_token = await _get_access_token()
     if not access_token:
@@ -316,6 +324,9 @@ async def create_personal_event(title: str, event_date: str, event_time: str, du
         "start": {"dateTime": start_dt.isoformat(), "timeZone": tz},
         "end":   {"dateTime": end_dt.isoformat(),   "timeZone": tz},
     }
+    rrule = _RECURRENCE_RRULE.get(recurrence or "none")
+    if rrule:
+        event_body["recurrence"] = [rrule]
 
     url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
     try:
@@ -347,7 +358,7 @@ class PendingEventUpdate(BaseModel):
     duration_hours: Optional[float] = None
 
 
-async def _create_pending_event(db: AsyncSession, title: str, event_date: str, event_time: str, duration_hours: float = 1.0):
+async def _create_pending_event(db: AsyncSession, title: str, event_date: str, event_time: str, duration_hours: float = 1.0, recurrence: str = "none"):
     from app.features.integrations.models import PendingCalendarEvent
     ev = PendingCalendarEvent(
         id=str(uuid.uuid4()),
@@ -355,6 +366,7 @@ async def _create_pending_event(db: AsyncSession, title: str, event_date: str, e
         event_date=event_date,
         event_time=event_time,
         duration_hours=duration_hours,
+        recurrence=recurrence or "none",
         created_at=now_brt().isoformat(),
     )
     db.add(ev)
@@ -363,13 +375,31 @@ async def _create_pending_event(db: AsyncSession, title: str, event_date: str, e
     return ev
 
 
+class PendingEventCreate(BaseModel):
+    title: str
+    event_date: str
+    event_time: str
+    duration_hours: float = 1.0
+    recurrence: str = "none"
+
+
+@router.post("/calendar/pending", status_code=201)
+async def create_pending_event_direct(data: PendingEventCreate, db: AsyncSession = Depends(get_db)):
+    """Cria um evento pendente diretamente do dashboard."""
+    ev = await _create_pending_event(db, data.title, data.event_date, data.event_time, data.duration_hours, data.recurrence)
+    return {"id": ev.id, "title": ev.title, "event_date": ev.event_date,
+            "event_time": ev.event_time, "duration_hours": ev.duration_hours,
+            "recurrence": ev.recurrence}
+
+
 @router.get("/calendar/pending")
 async def list_pending_events(db: AsyncSession = Depends(get_db)):
     from app.features.integrations.models import PendingCalendarEvent
     result = await db.execute(select(PendingCalendarEvent).order_by(PendingCalendarEvent.created_at))
     return [
         {"id": e.id, "title": e.title, "event_date": e.event_date,
-         "event_time": e.event_time, "duration_hours": e.duration_hours}
+         "event_time": e.event_time, "duration_hours": e.duration_hours,
+         "recurrence": e.recurrence or "none"}
         for e in result.scalars().all()
     ]
 
@@ -397,7 +427,7 @@ async def confirm_pending_event(event_id: str, db: AsyncSession = Depends(get_db
     if not ev:
         raise HTTPException(status_code=404, detail="Evento não encontrado")
 
-    gcal = await create_personal_event(ev.title, ev.event_date, ev.event_time, ev.duration_hours)
+    gcal = await create_personal_event(ev.title, ev.event_date, ev.event_time, ev.duration_hours, ev.recurrence or "none")
     if not gcal.get("ok"):
         raise HTTPException(status_code=502, detail=gcal.get("error", "gcal_error"))
 

@@ -10,4 +10,5 @@ class PendingCalendarEvent(Base):
     event_date   = Column(Text, nullable=False)
     event_time   = Column(Text, nullable=False)
     duration_hours = Column(Float, default=1.0)
+    recurrence   = Column(Text, default="none")  # none | daily | weekly | biweekly | monthly
     created_at   = Column(Text, nullable=False)
